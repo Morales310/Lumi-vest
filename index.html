@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LUMI-VEST | Property Listings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="container header__inner">
+      <a class="logo" href="#">LUMI-VEST</a>
+
+      <nav class="nav">
+        <a href="#listings">Listings</a>
+        <a href="#contact">Contact</a>
+      </nav>
+
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">
+        <span class="theme-toggle__icon" id="themeIcon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero__inner">
+        <p class="eyebrow">Premium property listings</p>
+        <h1>Find the right space with a clean, simple experience.</h1>
+        <p class="hero__text">
+          Browse available properties, preview gallery images, and contact the agent directly from one focused homepage.
+        </p>
+      </div>
+    </section>
+
+    <section class="filters" aria-label="Property filters">
+  <div class="container">
+    <form class="filters__bar" id="filtersForm">
+      <div class="field">
+        <label for="location">Location</label>
+        <input type="text" id="location" placeholder="e.g. Abuja, Wuse, Maitama" />
+      </div>
+
+      <div class="field">
+        <label for="price">Price range</label>
+        <select id="price">
+          <option value="">Any price</option>
+          <option value="0-50000000">Under ₦50M</option>
+          <option value="50000000-100000000">₦50M - ₦100M</option>
+          <option value="100000000-999999999">Above ₦100M</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="type">Property type</label>
+        <select id="type">
+          <option value="">Any type</option>
+          <option value="house">House</option>
+          <option value="apartment">Apartment</option>
+          <option value="duplex">Duplex</option>
+          <option value="villa">Villa</option>
+        </select>
+      </div>
+
+      <button class="filters__btn" type="submit">Search</button>
+      <button class="filters__clear" type="button" id="clearFilters">Clear</button>
+    </form>
+  </div>
+</section>
+
+    <section class="listings" id="listings">
+      <div class="container">
+        <div class="section-heading">
+          <h2>Featured properties</h2>
+          <p>Carefully selected listings for your MVP launch.</p>
+        </div>
+
+        <div class="properties-grid">
+          <article class="property-card">
+            <div class="property-card__main">
+              <img src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80" alt="Modern family house" />
+              <div class="property-card__content">
+                <div class="property-card__top">
+                  <h3>Modern Family Home</h3>
+                  <span class="price">₦85,000,000</span>
+                </div>
+                <p class="location">Wuse 2, Abuja</p>
+                <p class="details">4 Beds · 5 Baths · 2 Living Rooms · 1 Kitchen</p>
+                <p class="description">
+                  A bright, spacious home with clean finishes, secure parking, and a quiet neighborhood.
+                </p>
+
+                <div class="contact-box">
+                  <h4>Contact for this property</h4>
+                  <a href="tel:+2348012345678">+234 801 234 5678</a>
+                  <a href="mailto:agent@estateflow.ng">agent@estateflow.ng</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="gallery">
+              <img src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=600&q=80" alt="Living room" />
+              <img src="https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=600&q=80" alt="Bedroom" />
+              <img src="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=600&q=80" alt="Kitchen" />
+            </div>
+          </article>
+
+          <article class="property-card">
+            <div class="property-card__main">
+              <img src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80" alt="Modern family house" />
+              <div class="property-card__content">
+                <div class="property-card__top">
+                  <h3>Modern Family Home</h3>
+                  <span class="price">₦85,000,000</span>
+                </div>
+                <p class="location">Wuse 2, Abuja</p>
+                <p class="details">4 Beds · 5 Baths · 2 Living Rooms · 1 Kitchen</p>
+                <p class="description">
+                  A bright, spacious home with clean finishes, secure parking, and a quiet neighborhood.
+                </p>
+
+                <div class="contact-box">
+                  <h4>Contact for this property</h4>
+                  <a href="tel:+2348012345678">+234 801 234 5678</a>
+                  <a href="mailto:agent@estateflow.ng">agent@estateflow.ng</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="gallery">
+              <img src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=600&q=80" alt="Living room" />
+              <img src="https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=600&q=80" alt="Bedroom" />
+              <img src="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=600&q=80" alt="Kitchen" />
+            </div>
+          </article>
+
+          <article class="property-card">
+            <div class="property-card__main">
+              <img src="https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80" alt="Luxury apartment" />
+              <div class="property-card__content">
+                <div class="property-card__top">
+                  <h3>Luxury Apartment</h3>
+                  <span class="price">₦62,500,000</span>
+                </div>
+                <p class="location">Maitama, Abuja</p>
+                <p class="details">3 Beds · 3 Baths · Balcony · Elevator Access</p>
+                <p class="description">
+                  Minimalist apartment with great lighting, premium fittings, and a strong city view.
+                </p>
+
+                <div class="contact-box">
+                  <h4>Contact for this property</h4>
+                  <a href="tel:+2348098765432">+234 809 876 5432</a>
+                  <a href="mailto:sales@estateflow.ng">sales@estateflow.ng</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="gallery">
+              <img src="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80" alt="Apartment interior" />
+              <img src="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=600&q=80" alt="Kitchen interior" />
+              <img src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=600&q=80" alt="Living space" />
+            </div>
+          </article>
+
+          <article class="property-card">
+            <div class="property-card__main">
+              <img src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=1200&q=80" alt="Contemporary house" />
+              <div class="property-card__content">
+                <div class="property-card__top">
+                  <h3>Contemporary Duplex</h3>
+                  <span class="price">₦110,000,000</span>
+                </div>
+                <p class="location">Jabi, Abuja</p>
+                <p class="details">5 Beds · 6 Baths · Rooftop Terrace · BQ</p>
+                <p class="description">
+                  A refined duplex with large windows, open spaces, and a premium family layout.
+                </p>
+
+                <div class="contact-box">
+                  <h4>Contact for this property</h4>
+                  <a href="tel:+2348123456789">+234 812 345 6789</a>
+                  <a href="mailto:hello@estateflow.ng">hello@estateflow.ng</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="gallery">
+              <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80" alt="Dining area" />
+              <img src="https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=600&q=80" alt="Bathroom" />
+              <img src="https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=600&q=80" alt="Outdoor view" />
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" id="contact">
+    <div class="container footer__inner">
+      <p>LUMI-VEST © 2026</p>
+      <p>Clean MVP for property discovery and direct contact.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
