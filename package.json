@@ -1,0 +1,13 @@
+{
+  "name": "lumivest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LUMI-VEST — Airbnb-style property marketplace for Kaduna (static site)",
+  "scripts": {
+    "start": "npx --yes serve -l 3000 .",
+    "dev": "npx --yes serve -l 3000 .",
+    "deploy:netlify": "npx --yes netlify-cli deploy --prod --dir ."
+  },
+  "keywords": ["real-estate", "static-site", "airbnb-style"],
+  "license": "UNLICENSED"
+}

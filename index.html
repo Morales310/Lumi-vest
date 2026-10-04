@@ -1,304 +1,254 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LUMI-VEST | Property Listings</title>
+  <title>LUMI-VEST — Homes for sale &amp; rent in Kaduna</title>
+  <meta name="description" content="LUMI-VEST is a clean, fast property marketplace. Browse verified homes for sale and rent in Kaduna — bungalows, apartments and distress deals, with direct agent contact." />
+  <meta property="og:title" content="LUMI-VEST — Homes for sale & rent in Kaduna" />
+  <meta property="og:description" content="Browse verified homes for sale and rent in Kaduna, with direct agent contact." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FF385C'/%3E%3Cpath d='M8 17.5 16 10l8 7.5M10.5 16.5V24h11v-7.5' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <header class="header">
-    <div class="container header__inner">
-      <a class="logo" href="#">LUMI-VEST</a>
+<body id="top">
 
-      <nav class="nav">
-        <a href="#listings">Listings</a>
-        <a href="#contact">Contact</a>
+  <!-- ============ HEADER ============ -->
+  <header class="site-header" id="siteHeader">
+    <div class="header-inner container-wide">
+      <a class="brand" href="#top" aria-label="LUMI-VEST home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#FF385C"/><path d="M8 17.5 16 10l8 7.5M10.5 16.5V24h11v-7.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>LUMI-VEST</span>
+      </a>
+
+      <form class="search-bar" id="searchForm" role="search" aria-label="Search properties">
+        <button type="button" class="search-compact" id="searchCompact" aria-expanded="false" aria-controls="searchFields">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+          <span>Start your search</span>
+        </button>
+
+        <div class="search-fields" id="searchFields">
+          <label class="sf sf--where">
+            <span>Where</span>
+            <input type="text" id="fLocation" placeholder="Search area or city" autocomplete="off" />
+          </label>
+          <label class="sf sf--type">
+            <span>Property type</span>
+            <select id="fType">
+              <option value="">Any type</option>
+              <option value="house">House / bungalow</option>
+              <option value="apartment">Apartment</option>
+            </select>
+          </label>
+          <label class="sf sf--price">
+            <span>Price</span>
+            <select id="fPrice">
+              <option value="">Any price</option>
+              <option value="0-10000000">Under ₦10M</option>
+              <option value="10000000-20000000">₦10M – ₦20M</option>
+              <option value="20000000-999999999">₦20M +</option>
+            </select>
+          </label>
+          <button class="search-btn" type="submit" aria-label="Search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+            <span>Search</span>
+          </button>
+        </div>
+      </form>
+
+      <nav class="header-right">
+        <a class="host-link" href="#list-property">List your property</a>
+        <button class="icon-btn" type="button" aria-label="Language">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.5 4 5.6 4 9s-1.4 6.5-4 9c-2.6-2.5-4-5.6-4-9s1.4-6.5 4-9z"/></svg>
+        </button>
+        <div class="menu-wrap">
+          <button class="avatar-btn" type="button" id="menuBtn" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="burger"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+            <span class="avatar-dot">JV</span>
+          </button>
+          <div class="menu-drop" id="menuDrop" hidden>
+            <a href="#" data-menu="saved">Saved homes <em id="savedCountMenu">0</em></a>
+            <a href="#host">Contact the agent</a>
+            <a href="#list-property">List your property</a>
+            <hr />
+            <a href="#help">Help centre</a>
+          </div>
+        </div>
       </nav>
+    </div>
 
-      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">
-        <span class="theme-toggle__icon" id="themeIcon">🌙</span>
-      </button>
+    <div class="cats-wrap">
+      <nav class="cats container-wide" id="categories" aria-label="Property categories"></nav>
     </div>
   </header>
 
-  <main>
-    <section class="hero">
-      <div class="container hero__inner">
-        <p class="eyebrow">Premium property listings</p>
-        <h1>Find the right space with a clean, simple experience.</h1>
-        <p class="hero__text">
-          Browse available properties, preview gallery images, and contact the agent directly from one focused homepage.
-        </p>
-      </div>
-    </section>
-
-    <section class="filters" aria-label="Property filters">
-  <div class="container">
-    <form class="filters__bar" id="filtersForm">
-      <div class="field">
-        <label for="location">Location</label>
-        <input type="text" id="location" placeholder="e.g. Abuja, Wuse, Maitama" />
-      </div>
-
-      <div class="field">
-        <label for="price">Price range</label>
-        <select id="price">
-          <option value="">Any price</option>
-          <option value="0-50000000">Under ₦50M</option>
-          <option value="50000000-100000000">₦50M - ₦100M</option>
-          <option value="100000000-999999999">Above ₦100M</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="type">Property type</label>
-        <select id="type">
-          <option value="">Any type</option>
-          <option value="house">House</option>
-          <option value="apartment">Apartment</option>
-          <option value="duplex">Duplex</option>
-          <option value="villa">Villa</option>
-        </select>
-      </div>
-
-      <button class="filters__btn" type="submit">Search</button>
-      <button class="filters__clear" type="button" id="clearFilters">Clear</button>
-    </form>
-  </div>
-</section>
-
-    <section class="listings" id="listings">
-      <div class="container">
-        <div class="section-heading">
-          <h2>Featured properties</h2>
-          <p>Carefully selected listings for your MVP launch.</p>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="container hero-inner">
+      <div class="hero-copy reveal">
+        <p class="hero-kicker">Kaduna · Verified listings · Direct agent</p>
+        <h1>Homes you&rsquo;ll love, <em>priced</em> for real life.</h1>
+        <p class="hero-sub">Bungalows, apartments and distress deals across Kaduna — every listing inspected, every price transparent, every enquiry answered the same day.</p>
+        <div class="hero-cta">
+          <a class="btn btn-gradient" href="#listings">Browse homes</a>
+          <a class="btn btn-ghost" href="#host">Talk to the agent</a>
         </div>
+        <dl class="hero-stats">
+          <div><dd class="stat-num" data-count="5">0</dd><dt>Curated listings</dt></div>
+          <div><dd class="stat-num" data-count="4.9" data-decimals="1">0</dd><dt>Average rating</dt></div>
+          <div><dd class="stat-num" data-count="3">0</dd><dt>Neighbourhoods</dt></div>
+          <div><dd class="stat-num" data-count="100" data-suffix="%">0</dd><dt>Inspected in person</dt></div>
+        </dl>
+      </div>
 
-    <div class="properties-grid">
-        <article class="property-card"
-            data-title="Standalone Bungalow"
-            data-location="Baya Dutse, Narayi, Kaduna South"
-            data-price="1,300,0000"
-            data-type="House"
-            data-status="Available for Rent"
-            data-description="Pop siting, Fully tiled, Borehole, and Shop"
-            data-bedrooms="3"
-            data-bathrooms="3"
-            data-parking="1 Car"
-            data-size="30 sqm"
-            data-image-1="https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80"
-            data-image-2="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80"
-            data-image-3="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80"
-            data-phone="+2349168659842"
-            data-email="jesevelarrealestate@gmail.com">
-            <button class="property-open" type="button">
-            <video autoplay muted>
-              <source src="VID-20260624-WA0010.mp4" type="video/mp4">
-            </video> 
-            <div class="property-card__content">
-                <div class="property-card__top">
-                <h3>Three Bedroom Standalone Bungalow</h3>
-                <span class="price">₦1,300,000</span>
-                </div>
-                <p class="location">Baya Dutse, Narayi, Kaduna South</p>
-                <p class="details">3 Beds · 3 Baths · House</p>
-                <p class="description">Pop siting, Fully tiled, Borehole, and Shop.</p>
-            </div>
-            </button>
-        </article>
-
-        <article class="property-card"
-            data-title="Double 2 Bedroom Apartment"
-            data-location="Karatudu, Kaduna"
-            data-price="12,000,000"
-            data-type="2 Bedroom Apartment"
-            data-status="Available for Sale"
-            data-description="Fenced, Gated, Borehole, Tiles, Meter. PVC"
-            data-bedrooms="2"
-            data-bathrooms="1"
-            data-parking="2 Cars"
-            data-size="39 sqm"
-            data-image-1="img/IMG-20260624-WA0015.jpg"
-            data-image-2="img/IMG-20260624-WA0013.jpg"
-            data-image-3="img/IMG-20260624-WA0011.jpg"
-            data-phone="+2349168659842"
-            data-email="jesevelarrealestate@gmail.com">
-            <button class="property-open" type="button">
-            <img src="img/IMG-20260624-WA0014.jpg" alt="Contemporary Apartment" />
-            <div class="property-card__content">
-                <div class="property-card__top">
-                <h3>Double 2 Bedroom Apartment</h3>
-                <span class="price">₦12,000,000</span>
-                </div>
-                <p class="location">Karatudu, Kaduna</p>
-                <p class="details">2 Beds · 1 Baths · 2 Apartment</p>
-                <p class="description">Fenced, Gated, Borehole, Tiles, Meter. PVC</p>
-            </div>
-            </button>
-        </article>
-
-        <article class="property-card"
-            data-title="3 Bedroom Apartment"
-            data-location="Kamazo, off Yakowa Way, close to ECWA Goodnews Church, Kaduna"
-            data-price="15,000,000"
-            data-type="Apartment"
-            data-status="Under Construction"
-            data-description="Three-bedroom flat currently under construction, along with completed one unit each of one bedroom flat and a room selfcon.  "
-            data-bedrooms="3"
-            data-bathrooms="2"
-            data-parking="2 Car"
-            data-size="35 sqm"
-            data-image-1="https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80"
-            data-image-2="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80"
-            data-image-3="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80"
-            data-phone="+2349168659842"
-            data-email="jesevelarrealestate@gmail.com">
-            <button class="property-open" type="button">
-            <video width="1118px" height="500px" autoplay muted>
-              <source src="VID-20260624-WA0017.mp4" type="video/mp4">
-            </video> 
-            <div class="property-card__content">
-                <div class="property-card__top">
-                <h3>3 Bedroom Apartment</h3>
-                <span class="price">₦15,000,000</span>
-                </div>
-                <p class="location">Kamazo, off Yakowa Way, close to ECWA Goodnews Church, Kaduna</p>
-                <p class="details">3 Beds · 2 Baths · Apartment</p>
-                <p class="description">3 bedroom flat currently under construction, along with completed 1 unit each of 1 bedroom flat and a room selfcon.  </p>
-            </div>
-            </button>
-        </article>
-
-        <article class="property-card"
-            data-title="1 Bedroom Apartment"
-            data-location=" Mahuta Ext, by Dinam Hotel, Kaduna"
-            data-price="19,000,000"
-            data-type="Apartment"
-            data-status="Available for Distress"
-            data-description="Five units one bedroom flat, aluminum roof, PVC ,spacious sitting and bedroom, concrete compound, borehole fenced, gated, good proximity to tarred road"
-            data-bedrooms="1"
-            data-bathrooms="1"
-            data-parking="1 Car"
-            data-size="30 sqm"
-            data-image-1="https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80"
-            data-image-2="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80"
-            data-image-3="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80"
-            data-phone="+2349168659842"
-            data-email="jesevelarrealestate@gmail.com">
-            <button class="property-open" type="button">
-            <video width="100%" height="500px" autoplay muted>
-              <source src="VID-20260624-WA0000.mp4" type="video/mp4">
-            </video> 
-            <div class="property-card__content">
-                <div class="property-card__top">
-                <h3>5 Units, 1 Bedroom Apartment</h3>
-                <span class="price">₦19,000,000</span>
-                </div>
-                <p class="location"> Mahuta Ext, by Dinam Hotel, Close proximity to tarred road</p>
-                <p class="details">1 Beds · 1 Baths · 1Apartment</p>
-                <p class="description">Five units one bedroom flat, aluminum roof, PVC ,Spacious Sitting and Bedroom, Concrete compound,Borehole, Fenced, Gated, Close proximity to tarred road.</p>
-            </div>
-            </button>
-        </article>
-
-        <article class="property-card"
-            data-title="Luxury Apartment"
-            data-location="Maitama, Abuja"
-            data-price="62500000"
-            data-type="Apartment"
-            data-status="Available"
-            data-description="Minimalist apartment with great lighting, premium fittings, and a strong city view."
-            data-bedrooms="3"
-            data-bathrooms="3"
-            data-parking="1 Car"
-            data-size="180 sqm"
-            data-image-1="https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80"
-            data-image-2="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80"
-            data-image-3="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80"
-            data-phone="+2348098765432"
-            data-email="sales@estateflow.ng">
-            <button class="property-open" type="button">
-            <img src="https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80" alt="Luxury apartment" />
-            <div class="property-card__content">
-                <div class="property-card__top">
-                <h3>Luxury Apartment</h3>
-                <span class="price">₦62,500,000</span>
-                </div>
-                <p class="location">Maitama, Abuja</p>
-                <p class="details">3 Beds · 3 Baths · Apartment</p>
-                <p class="description">Minimalist apartment with great lighting and premium fittings.</p>
-            </div>
-            </button>
-        </article>
+      <div class="hero-collage reveal" aria-hidden="true">
+        <figure class="collage-main">
+          <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80" alt="" loading="eager" />
+        </figure>
+        <figure class="collage-float collage-video">
+          <video muted loop playsinline preload="metadata">
+            <source src="VID-20260624-WA0010.mp4" type="video/mp4" />
+          </video>
+        </figure>
+        <div class="collage-float collage-chip">
+          <span class="chip-icon">★</span>
+          <span><strong>Top pick</strong>Narayi · Kaduna</span>
+        </div>
+        <div class="collage-float collage-price">
+          <span class="chip-icon">₦</span>
+          <span><strong>₦1.3M / year</strong>3-bed standalone</span>
+        </div>
+      </div>
     </div>
 
-      <div class="modal" id="propertyModal" aria-hidden="true">
-  <div class="modal__backdrop" id="modalBackdrop"></div>
-
-  <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <button class="modal__close" id="modalClose" type="button" aria-label="Close property details">×</button>
-
-    <div class="modal__loading" id="modalLoading" aria-live="polite" aria-busy="true">
-        <div class="skeleton skeleton--image"></div>
-        <div class="skeleton skeleton--line"></div>
-        <div class="skeleton skeleton--line short"></div>
-        <div class="skeleton skeleton--box"></div>
-        <div class="skeleton skeleton--box"></div>
-    </div>
-
-    <div class="modal__content">
-      <div class="modal__media">
-        <img id="modalMainImage" src="" alt="" />
-        <div class="modal__thumbs" id="modalThumbs"></div>
-      </div>
-
-      <div class="modal__info">
-        <div>
-          <p class="eyebrow" id="modalType">Property</p>
-          <h2 id="modalTitle">Property Title</h2>
-          <p class="modal__meta" id="modalLocation">Location</p>
-        </div>
-
-        <div class="modal__price-row">
-          <span class="modal__price" id="modalPrice">₦0</span>
-          <span class="modal__tag" id="modalStatus">Available</span>
-        </div>
-
-        <div class="modal__facts" id="modalFacts"></div>
-
-        <p class="modal__desc" id="modalDescription"></p>
-
-        <form class="inquiry-form" id="inquiryForm">
-          <h3>Contact for this property</h3>
-
-          <label for="name">Full name</label>
-          <input id="name" name="name" type="text" placeholder="Your full name" required />
-
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" placeholder="Your email" required />
-
-          <label for="phone">Phone number</label>
-          <input id="phone" name="phone" type="tel" placeholder="Your phone number" required />
-
-          <label for="message">Message</label>
-          <textarea id="message" name="message" rows="4" placeholder="I’m interested in this property..." required></textarea>
-
-          <button type="submit" class="inquiry-form__btn">Request Viewing</button>
-        </form>
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>Narayi</span><i>•</i><span>Karatudu</span><i>•</i><span>Kamazo</span><i>•</i><span>Mahuta</span><i>•</i><span>Goningora</span><i>•</i><span>Buwaya</span><i>•</i><span>Kaduna South</span><i>•</i>
+        <span>Narayi</span><i>•</i><span>Karatudu</span><i>•</i><span>Kamazo</span><i>•</i><span>Mahuta</span><i>•</i><span>Goningora</span><i>•</i><span>Buwaya</span><i>•</i><span>Kaduna South</span><i>•</i>
       </div>
     </div>
   </section>
-</div>
-    </section>
+
+  <!-- ============ LISTINGS ============ -->
+  <main class="listings" id="listings">
+    <div class="container">
+      <div class="listings-head reveal">
+        <div>
+          <h2>Explore homes</h2>
+          <p id="resultsCount">Loading listings…</p>
+        </div>
+        <label class="sort-wrap">
+          <span>Sort</span>
+          <select id="sortSelect">
+            <option value="recommended">Recommended</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+            <option value="beds-desc">Most bedrooms</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="grid" id="grid"></div>
+
+      <div class="empty" id="emptyState" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8.5 11h5"/></svg>
+        <h3>No homes match your search</h3>
+        <p>Try widening the price range or clearing the filters.</p>
+        <button class="btn btn-dark" type="button" id="clearFilters">Clear all filters</button>
+      </div>
+    </div>
   </main>
 
-  <footer class="footer" id="contact">
-    <div class="container footer__inner">
-      <p>LUMI-VEST © 2026</p>
-      <p>Clean MVP for property discovery and direct contact.</p>
+  <!-- ============ HOST ============ -->
+  <section class="host" id="host">
+    <div class="container host-inner reveal">
+      <figure class="host-photo">
+        <img src="img/jesevelar.jpeg" alt="Jese Velar, lead agent at LUMI-VEST" loading="lazy" />
+        <span class="host-badge">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.3l6.1-.7z"/></svg>
+          Top-rated agent
+        </span>
+      </figure>
+      <div class="host-copy">
+        <h2>Meet your host</h2>
+        <p class="host-name">Jese Velar <span>· LUMI-VEST Real Estate</span></p>
+        <p class="host-bio">Every home on LUMI-VEST is visited, photographed and priced by Jese before it goes live. Ask about a listing and you&rsquo;ll get an answer within hours — viewings can be arranged the same week.</p>
+        <ul class="host-points">
+          <li>Same-day replies on WhatsApp</li>
+          <li>Verified, on-site inspections</li>
+          <li>Negotiation support on every deal</li>
+        </ul>
+        <div class="host-actions">
+          <a class="btn btn-gradient" href="tel:+2349168659842">Call agent</a>
+          <a class="btn btn-outline" href="https://wa.me/2349168659842?text=Hello%20LUMI-VEST%2C%20I%27m%20interested%20in%20a%20listing." target="_blank" rel="noopener">WhatsApp</a>
+          <a class="btn btn-ghost" href="mailto:jesevelarrealestate@gmail.com">Email</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA BANNER ============ -->
+  <section class="banner" id="list-property">
+    <div class="container banner-inner reveal">
+      <div>
+        <h2>Own a property in Kaduna?</h2>
+        <p>List it on LUMI-VEST and reach serious buyers and tenants — photography included.</p>
+      </div>
+      <a class="btn btn-light" href="mailto:jesevelarrealestate@gmail.com?subject=List%20my%20property%20on%20LUMI-VEST">List your property</a>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer" id="help">
+    <div class="container footer-cols">
+      <div class="footer-col">
+        <h3>Support</h3>
+        <a href="#host">Contact the agent</a>
+        <a href="#listings">Browse homes</a>
+        <a href="#list-property">List a property</a>
+      </div>
+      <div class="footer-col">
+        <h3>Explore</h3>
+        <a href="#listings">Houses for sale</a>
+        <a href="#listings">Rentals</a>
+        <a href="#listings">Distress deals</a>
+      </div>
+      <div class="footer-col">
+        <h3>LUMI-VEST</h3>
+        <a href="#top">About</a>
+        <a href="#top">Trust &amp; safety</a>
+        <a href="#top">Privacy · Terms</a>
+      </div>
+    </div>
+    <div class="container footer-bar">
+      <p>© 2026 LUMI-VEST · Clean property discovery, direct contact.</p>
+      <p class="footer-meta"><span>🌍 English (NG)</span><span>₦ NGN</span></p>
     </div>
   </footer>
+
+  <!-- Floating actions -->
+  <a class="wa-float" href="https://wa.me/2349168659842?text=Hello%20LUMI-VEST%2C%20I%27m%20interested%20in%20a%20listing." target="_blank" rel="noopener" aria-label="Chat on WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.8 8.6c.5 2.8 3.8 6 6.6 6.6l1.2-1.6-2-1.3-1 .8c-.9-.5-1.9-1.5-2.4-2.4l.8-1-1.3-2z" fill="currentColor" stroke="none"/></svg>
+  </a>
+  <button class="to-top" id="backToTop" type="button" aria-label="Back to top">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V6m0 0-5.5 5.5M12 6l5.5 5.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+
+  <!-- ============ LISTING MODAL ============ -->
+  <div class="modal" id="listingModal" aria-hidden="true">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitleStatic">
+      <button class="modal-close" id="modalClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-content" id="modalContent"></div>
+    </section>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script src="script.js"></script>
 </body>
