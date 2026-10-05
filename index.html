@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
 </head>
 <body id="top">
 
@@ -74,6 +74,7 @@
             <a href="#host">Contact the agent</a>
             <a href="#list-property">List your property</a>
             <hr />
+            <a href="#" data-menu="admin">Manage listings</a>
             <a href="#help">Help centre</a>
           </div>
         </div>
@@ -250,6 +251,23 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="script.js"></script>
+  <!-- ============ ADMIN PANEL ============ -->
+  <div class="admin" id="adminPanel" aria-hidden="true">
+    <div class="admin-backdrop" id="adminBackdrop"></div>
+    <section class="admin-panel" role="dialog" aria-modal="true" aria-label="Admin panel">
+      <header class="admin-head">
+        <span class="admin-brand">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#FF385C"/><path d="M8 17.5 16 10l8 7.5M10.5 16.5V24h11v-7.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Admin
+        </span>
+        <button class="admin-close" id="adminClose" type="button" aria-label="Close admin panel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <div class="admin-body" id="adminBody"></div>
+    </section>
+  </div>
+
+  <script src="script.js?v=2"></script>
 </body>
 </html>

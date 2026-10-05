@@ -245,6 +245,42 @@ let saved = new Set(storage.get("lumivest:saved", []));
 
 const persistSaved = () => storage.set("lumivest:saved", [...saved]);
 
+/* ---------------- Listings store ---------------- */
+
+const LISTINGS_KEY = "lumivest:listings";
+let publishedListings = null;
+let listingsCache = null;
+
+const defaultListings = () => JSON.parse(JSON.stringify(PROPERTIES));
+
+function getListings() {
+  if (!listingsCache) {
+    const local = storage.get(LISTINGS_KEY, null);
+    if (Array.isArray(local) && local.length) listingsCache = local;
+    else if (Array.isArray(publishedListings) && publishedListings.length)
+      listingsCache = publishedListings;
+    else listingsCache = defaultListings();
+  }
+  return listingsCache;
+}
+
+function saveListings(list) {
+  listingsCache = list;
+  storage.set(LISTINGS_KEY, list);
+}
+
+async function loadPublished() {
+  try {
+    const res = await fetch("listings.json", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length) publishedListings = data;
+    }
+  } catch {
+    /* no published listings.json — fall back to defaults */
+  }
+}
+
 /* ---------------- Toasts ---------------- */
 
 const toastsEl = $("#toasts");
@@ -298,6 +334,8 @@ const searchForm = $("#searchForm");
 const state = { q: "", type: "", price: "" };
 
 function matches(p) {
+  if (p.draft) return false;
+
   if (activeCat === "saved") {
     if (!saved.has(p.id)) return false;
   } else if (activeCat === "house" || activeCat === "apartment") {
@@ -386,7 +424,7 @@ function cardHTML(p, i) {
 }
 
 function render() {
-  const list = sortList(PROPERTIES.filter(matches));
+  const list = sortList(getListings().filter(matches));
   grid.innerHTML = list.map(cardHTML).join("");
   emptyState.hidden = list.length > 0;
   resultsCount.textContent = list.length
@@ -426,7 +464,7 @@ function playVideos(card) {
 grid.addEventListener("click", (e) => {
   const card = e.target.closest(".card");
   if (!card) return;
-  const p = PROPERTIES.find((x) => x.id === card.dataset.id);
+  const p = getListings().find((x) => x.id === card.dataset.id);
   if (!p) return;
 
   const heart = e.target.closest(".card-heart");
@@ -466,7 +504,7 @@ grid.addEventListener("keydown", (e) => {
   if (!media) return;
   e.preventDefault();
   const card = media.closest(".card");
-  const p = PROPERTIES.find((x) => x.id === card.dataset.id);
+  const p = getListings().find((x) => x.id === card.dataset.id);
   if (p) openModal(p, card);
 });
 
@@ -558,7 +596,10 @@ document.addEventListener("click", (e) => {
 menuDrop.addEventListener("click", (e) => {
   const link = e.target.closest("a");
   if (!link) return;
-  if (link.dataset.menu === "saved") {
+  if (link.dataset.menu === "admin") {
+    e.preventDefault();
+    openAdmin();
+  } else if (link.dataset.menu === "saved") {
     e.preventDefault();
     activeCat = "saved";
     renderCategories();
@@ -589,20 +630,21 @@ function modalHTML(p) {
     ? `<strong>★ ${p.rating.toFixed(1)}</strong><span class="dot"></span><span>${p.reviews} reviews</span>`
     : `<span class="mb-status">New listing</span>`;
 
-  const thumbs = p.media
-    .slice(1, 4)
-    .map(
-      (m, i) =>
-        `<button type="button" class="mg-thumb" data-slide="${i + 1}" aria-label="Show photo ${i + 2}">${mediaEl(
-          m,
-          p,
-          ""
-        )}</button>`
-    )
-    .join("");
+  const thumbs =
+    p.media.length > 1
+      ? `<div class="mg-side">${p.media
+          .slice(1, 4)
+          .map(
+            (m, i) =>
+              `<button type="button" class="mg-thumb" data-slide="${
+                i + 1
+              }" aria-label="Show photo ${i + 2}">${mediaEl(m, p, "")}</button>`
+          )
+          .join("")}</div>`
+      : "";
 
   return `
-  <div class="mg">
+  <div class="mg${p.media.length > 1 ? "" : " mg--single"}">
     <div class="mg-main" id="mgMain">${mediaEl(p.media[0], p, "")}</div>
     ${thumbs}
     <button type="button" class="mg-nav mg-prev" id="mgPrev" aria-label="Previous photo">${svg("left")}</button>
@@ -885,10 +927,482 @@ function animateCounters() {
   els.forEach((el) => io.observe(el));
 }
 
+/* ---------------- Admin panel ---------------- */
+
+const ADMIN_EMAIL = CONTACT.email.trim().toLowerCase();
+const adminPanel = $("#adminPanel");
+const adminBody = $("#adminBody");
+let adminLastFocus = null;
+
+const esc = (s = "") =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+        c
+      ])
+  );
+
+function adminSignedIn() {
+  try {
+    return sessionStorage.getItem("lumivest:admin") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setAdminSignedIn(v) {
+  try {
+    v
+      ? sessionStorage.setItem("lumivest:admin", "1")
+      : sessionStorage.removeItem("lumivest:admin");
+  } catch {
+    /* ignore */
+  }
+}
+
+function openAdmin() {
+  adminLastFocus = document.activeElement;
+  adminPanel.classList.add("is-open");
+  adminPanel.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  adminSignedIn() ? renderAdminList() : renderGate();
+}
+
+function closeAdmin() {
+  adminPanel.classList.remove("is-open");
+  adminPanel.setAttribute("aria-hidden", "true");
+  if (!modal.classList.contains("is-open"))
+    document.body.classList.remove("modal-open");
+  if (adminLastFocus && adminLastFocus.focus) adminLastFocus.focus();
+}
+
+$("#adminClose").addEventListener("click", closeAdmin);
+$("#adminBackdrop").addEventListener("click", closeAdmin);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && adminPanel.classList.contains("is-open"))
+    closeAdmin();
+});
+
+/* --- email gate --- */
+function renderGate() {
+  adminBody.innerHTML = `
+    <div class="gate">
+      <div class="gate-lock">🔒</div>
+      <h3>Admin access</h3>
+      <p>Sign in with the owner account to add, edit and remove listings.</p>
+      <input type="email" id="gateEmail" placeholder="${ADMIN_EMAIL}" autocomplete="off">
+      <button class="btn btn-gradient" id="gateSubmit">Sign in</button>
+      <p class="gate-hint">Restricted to ${ADMIN_EMAIL}</p>
+    </div>`;
+
+  const input = $("#gateEmail");
+  const attempt = () => {
+    const val = input.value.trim().toLowerCase();
+    if (val === ADMIN_EMAIL) {
+      setAdminSignedIn(true);
+      toast("Welcome back — admin unlocked");
+      renderAdminList();
+    } else {
+      input.classList.remove("shake");
+      void input.offsetWidth;
+      input.classList.add("shake");
+      toast("Access denied — that email isn’t authorised");
+      input.select();
+    }
+  };
+
+  $("#gateSubmit").addEventListener("click", attempt);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      attempt();
+    }
+  });
+  input.focus();
+}
+
+/* --- dashboard --- */
+function renderAdminList() {
+  adminBody.onclick = null;
+  const list = getListings();
+
+  adminBody.innerHTML = `
+    <div class="admin-toolbar">
+      <button class="btn btn-gradient btn-sm" id="adminAdd">+ Add listing</button>
+      <div class="admin-tools">
+        <button class="btn btn-ghost btn-sm" id="adminExport">Export</button>
+        <button class="btn btn-ghost btn-sm" id="adminPublish">listings.json</button>
+        <button class="btn btn-ghost btn-sm" id="adminImport">Import</button>
+        <button class="btn btn-ghost btn-sm" id="adminReset">Reset</button>
+        <button class="btn btn-ghost btn-sm" id="adminLogout">Sign out</button>
+      </div>
+    </div>
+    <p class="admin-note">Changes apply instantly in this browser. To publish them for every visitor, click <b>listings.json</b>, then upload that file to the site root (drag &amp; drop it on Netlify, or commit it to the repo).</p>
+    <div class="admin-import" id="adminImportBox" hidden>
+      <textarea id="adminImportText" rows="5" placeholder='Paste exported listings JSON here…'></textarea>
+      <button class="btn btn-dark btn-sm" id="adminImportApply">Replace listings</button>
+    </div>
+    <div class="admin-list">
+      ${
+        list
+          .map(
+            (p, i) => `
+        <div class="admin-row" data-id="${esc(p.id)}">
+          <div class="admin-row-main">
+            <strong>${esc(p.title)}</strong>
+            ${p.draft ? '<span class="pill pill-draft">Draft</span>' : ""}
+            <span class="pill">${esc(p.status)}</span>
+            <small>${esc(p.location)} · ${naira(p.price)}</small>
+          </div>
+          <div class="admin-row-actions">
+            <button data-act="up" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
+            <button data-act="down" ${i === list.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
+            <button data-act="edit">Edit</button>
+            <button data-act="dup">Duplicate</button>
+            <button data-act="draft">${p.draft ? "Publish" : "Draft"}</button>
+            <button data-act="del" class="danger">Delete</button>
+          </div>
+        </div>`
+          )
+          .join("") || '<p class="admin-empty">No listings yet — add your first one.</p>'
+      }
+    </div>`;
+
+  $("#adminAdd").addEventListener("click", () => renderForm(null));
+  $("#adminExport").addEventListener("click", () =>
+    downloadJSON("lumivest-listings.json", getListings())
+  );
+  $("#adminPublish").addEventListener("click", () =>
+    downloadJSON("listings.json", getListings())
+  );
+  $("#adminImport").addEventListener("click", () => {
+    const box = $("#adminImportBox");
+    box.hidden = !box.hidden;
+    if (!box.hidden) $("#adminImportText").focus();
+  });
+  $("#adminImportApply").addEventListener("click", importListings);
+  $("#adminReset").addEventListener("click", resetListings);
+  $("#adminLogout").addEventListener("click", () => {
+    setAdminSignedIn(false);
+    renderGate();
+    toast("Signed out");
+  });
+
+  adminBody.onclick = (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn || btn.disabled) return;
+    const row = btn.closest(".admin-row");
+    const current = getListings();
+    const idx = current.findIndex((x) => x.id === row.dataset.id);
+    if (idx < 0) return;
+    const act = btn.dataset.act;
+
+    if (act === "edit") return renderForm(current[idx]);
+    if (act === "up" && idx > 0)
+      [current[idx - 1], current[idx]] = [current[idx], current[idx - 1]];
+    if (act === "down" && idx < current.length - 1)
+      [current[idx + 1], current[idx]] = [current[idx], current[idx + 1]];
+    if (act === "dup") {
+      const clone = JSON.parse(JSON.stringify(current[idx]));
+      clone.id = current[idx].id + "-copy-" + Date.now().toString(36);
+      clone.title += " (copy)";
+      clone.draft = true;
+      current.splice(idx + 1, 0, clone);
+      toast("Duplicated as draft");
+    }
+    if (act === "draft") {
+      current[idx].draft = !current[idx].draft;
+      toast(current[idx].draft ? "Moved to drafts" : "Published");
+    }
+    if (act === "del") {
+      if (!confirm(`Delete “${current[idx].title}”? This cannot be undone.`))
+        return;
+      current.splice(idx, 1);
+      toast("Listing deleted");
+    }
+
+    saveListings(current);
+    render();
+    renderAdminList();
+  };
+}
+
+/* --- add / edit form --- */
+function renderForm(p) {
+  adminBody.onclick = null;
+  const isNew = !p;
+  const media = p ? JSON.parse(JSON.stringify(p.media)) : [];
+  const highlights = p && Array.isArray(p.highlights) ? p.highlights.join("\n") : "";
+  const statusOptions = [
+    "For Sale",
+    "For Rent",
+    "Under Construction",
+    "Distress Sale",
+  ];
+
+  adminBody.innerHTML = `
+    <button class="admin-back-link" id="formBack">← All listings</button>
+    <h3 class="admin-form-title">${isNew ? "Add listing" : "Edit listing"}</h3>
+
+    <div class="form-grid">
+      <label>Title *<input id="aTitle" value="${esc(p?.title || "")}" placeholder="3 Bedroom Apartment"></label>
+      <label>Location *<input id="aLocation" value="${esc(p?.location || "")}" placeholder="Kaduna"></label>
+      <label>Property type
+        <select id="aType">
+          <option value="house" ${p?.type === "house" ? "selected" : ""}>House / bungalow</option>
+          <option value="apartment" ${!p || p.type === "apartment" ? "selected" : ""}>Apartment</option>
+        </select>
+      </label>
+      <label>Deal
+        <select id="aMode">
+          <option value="sale" ${!p || p.mode === "sale" ? "selected" : ""}>For sale</option>
+          <option value="rent" ${p?.mode === "rent" ? "selected" : ""}>For rent</option>
+        </select>
+      </label>
+      <label>Price (₦) *<input id="aPrice" type="number" min="0" value="${p?.price ?? ""}"></label>
+      <label>Price note<input id="aPriceNote" value="${esc(p?.priceNote || "")}" placeholder="e.g. ₦2,600,000 annual rent option"></label>
+      <label>Status
+        <select id="aStatus">
+          ${statusOptions
+            .map(
+              (s) =>
+                `<option ${p?.status === s ? "selected" : ""}>${s}</option>`
+            )
+            .join("")}
+        </select>
+      </label>
+      <label>Badge<input id="aBadge" value="${esc(p?.badge || "New")}" placeholder="Top pick"></label>
+      <label>Rating (0–5)<input id="aRating" type="number" step="0.1" min="0" max="5" value="${p?.rating ?? ""}"></label>
+      <label>Reviews<input id="aReviews" type="number" min="0" value="${p?.reviews ?? 0}"></label>
+      <label>Bedrooms<input id="aBeds" type="number" min="0" value="${p?.beds ?? 1}"></label>
+      <label>Bathrooms<input id="aBaths" type="number" min="0" value="${p?.baths ?? 1}"></label>
+      <label>Parking<input id="aParking" value="${esc(p?.parking || "1 car")}"></label>
+      <label>Land size<input id="aSize" value="${esc(p?.size || "")}" placeholder="30 sqm"></label>
+    </div>
+
+    <label class="form-block">Description
+      <textarea id="aDesc" rows="3" placeholder="Describe the property…">${esc(p?.desc || "")}</textarea>
+    </label>
+    <label class="form-block">Highlights (one per line)
+      <textarea id="aHighlights" rows="4" placeholder="Borehole water\nFenced & gated">${esc(highlights)}</textarea>
+    </label>
+
+    <label class="form-check"><input type="checkbox" id="aAlert" ${p?.alert ? "checked" : ""}> Red “distress sale” badge</label>
+    <label class="form-check"><input type="checkbox" id="aDraft" ${p?.draft ? "checked" : ""}> Save as draft (hidden from visitors)</label>
+
+    <div class="admin-media">
+      <h4>Photos &amp; videos</h4>
+      <div id="adminMediaRows"></div>
+      <div class="media-add">
+        <button type="button" class="btn btn-ghost btn-sm" id="mAddImg">+ Image URL</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="mAddVid">+ Video URL</button>
+        <label class="btn btn-ghost btn-sm file-label">Upload image<input type="file" id="mUpload" accept="image/*" hidden></label>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-gradient" id="aSave">${isNew ? "Add listing" : "Save changes"}</button>
+      <button class="btn btn-ghost" id="aCancel">Cancel</button>
+    </div>`;
+
+  const rows = $("#adminMediaRows");
+
+  function paintMedia() {
+    rows.innerHTML = media
+      .map(
+        (m, i) => `
+      <div class="media-row" data-i="${i}">
+        <span class="media-kind ${m.type === "video" ? "video" : ""}">${
+          m.type === "video" ? "VIDEO" : "IMG"
+        }</span>
+        <input data-src value="${esc(m.src)}">
+        <button type="button" data-mact="up" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
+        <button type="button" data-mact="down" ${i === media.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
+        <button type="button" data-mact="rm" class="danger" aria-label="Remove">✕</button>
+      </div>`
+      )
+      .join("") || '<p class="admin-empty">No media yet — add an image or video.</p>';
+  }
+  paintMedia();
+
+  rows.addEventListener("input", (e) => {
+    const inp = e.target.closest("[data-src]");
+    if (!inp) return;
+    media[Number(inp.closest(".media-row").dataset.i)].src = inp.value.trim();
+  });
+
+  rows.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-mact]");
+    if (!btn || btn.disabled) return;
+    const i = Number(btn.closest(".media-row").dataset.i);
+    if (btn.dataset.mact === "up" && i > 0)
+      [media[i - 1], media[i]] = [media[i], media[i - 1]];
+    if (btn.dataset.mact === "down" && i < media.length - 1)
+      [media[i + 1], media[i]] = [media[i], media[i + 1]];
+    if (btn.dataset.mact === "rm") media.splice(i, 1);
+    paintMedia();
+  });
+
+  $("#mAddImg").addEventListener("click", () => {
+    const url = prompt("Image URL:");
+    if (url && url.trim()) {
+      media.push({ type: "image", src: url.trim() });
+      paintMedia();
+    }
+  });
+
+  $("#mAddVid").addEventListener("click", () => {
+    const url = prompt("Video URL (.mp4):");
+    if (url && url.trim()) {
+      media.push({ type: "video", src: url.trim() });
+      paintMedia();
+    }
+  });
+
+  $("#mUpload").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 900 * 1024) {
+      toast("Image over 900KB — use a URL instead, or upload a smaller file");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      media.push({ type: "image", src: reader.result });
+      paintMedia();
+      toast("Image attached");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  });
+
+  $("#aSave").addEventListener("click", () => {
+    const title = $("#aTitle").value.trim();
+    const location = $("#aLocation").value.trim();
+    const price = Number($("#aPrice").value);
+    if (!title || !location || !price) {
+      toast("Title, location and price are required");
+      return;
+    }
+
+    const ratingRaw = $("#aRating").value;
+    const listing = {
+      id: p ? p.id : "custom-" + Date.now().toString(36),
+      title,
+      location,
+      type: $("#aType").value,
+      mode: $("#aMode").value,
+      price,
+      status: $("#aStatus").value,
+      badge: $("#aBadge").value.trim() || "New",
+      alert: $("#aAlert").checked,
+      rating: ratingRaw === "" ? null : Number(ratingRaw),
+      reviews: Number($("#aReviews").value) || 0,
+      beds: Number($("#aBeds").value) || 0,
+      baths: Number($("#aBaths").value) || 0,
+      parking: $("#aParking").value.trim() || "—",
+      size: $("#aSize").value.trim() || "—",
+      desc: $("#aDesc").value.trim(),
+      highlights: $("#aHighlights").value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      draft: $("#aDraft").checked,
+      media: media.filter((m) => m.src),
+    };
+
+    const note = $("#aPriceNote").value.trim();
+    if (note) listing.priceNote = note;
+    if (!listing.media.length)
+      listing.media = [{ type: "image", src: U("1523217582562-09d0def993a6") }];
+    listing.media.forEach((m) => {
+      m.type = /\.mp4(\?|$)/i.test(m.src) ? "video" : "image";
+    });
+
+    const current = getListings();
+    const idx = p ? current.findIndex((x) => x.id === p.id) : -1;
+    if (idx >= 0) current[idx] = listing;
+    else current.unshift(listing);
+
+    saveListings(current);
+    render();
+    renderAdminList();
+    toast(p ? "Listing updated" : "Listing added");
+  });
+
+  $("#aCancel").addEventListener("click", renderAdminList);
+  $("#formBack").addEventListener("click", renderAdminList);
+}
+
+/* --- import / export / reset --- */
+function downloadJSON(name, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Downloaded ${name}`);
+}
+
+function importListings() {
+  try {
+    const data = JSON.parse($("#adminImportText").value);
+    const arr = Array.isArray(data) ? data : data.listings;
+    if (!Array.isArray(arr) || !arr.length)
+      throw new Error("expected a non-empty array");
+    const cleaned = arr
+      .filter((x) => x && x.id && x.title)
+      .map((x) => ({
+        ...x,
+        media: Array.isArray(x.media)
+          ? x.media.filter((m) => m && m.src)
+          : [],
+        highlights: Array.isArray(x.highlights) ? x.highlights : [],
+      }))
+      .filter((x) => x.media.length);
+    if (!cleaned.length) throw new Error("no valid listings found");
+    saveListings(cleaned);
+    render();
+    renderAdminList();
+    toast(`Imported ${cleaned.length} listings`);
+  } catch (err) {
+    toast(`Import failed: ${err.message}`);
+  }
+}
+
+function resetListings() {
+  if (!confirm("Reset to the original listings? Your edits will be lost."))
+    return;
+  try {
+    localStorage.removeItem(LISTINGS_KEY);
+  } catch {
+    /* ignore */
+  }
+  listingsCache = null;
+  publishedListings = null;
+  render();
+  renderAdminList();
+  toast("Listings reset to defaults");
+}
+
 /* ---------------- Init ---------------- */
 
-renderCategories();
-updateSavedCount();
-render();
-observeReveals();
-animateCounters();
+async function init() {
+  await loadPublished();
+  renderCategories();
+  updateSavedCount();
+  render();
+  observeReveals();
+  animateCounters();
+}
+
+init();
