@@ -992,9 +992,9 @@ function renderGate() {
       <div class="gate-lock">🔒</div>
       <h3>Admin access</h3>
       <p>Sign in with the owner account to add, edit and remove listings.</p>
-      <input type="email" id="gateEmail" placeholder="${ADMIN_EMAIL}" autocomplete="off">
+      <input type="email" id="gateEmail" placeholder="example@gmail.com" autocomplete="off">
       <button class="btn btn-gradient" id="gateSubmit">Sign in</button>
-      <p class="gate-hint">Restricted to ${ADMIN_EMAIL}</p>
+      <p class="gate-hint">Restricted to Admin</p>
     </div>`;
 
   const input = $("#gateEmail");
