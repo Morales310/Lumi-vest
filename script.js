@@ -1346,7 +1346,7 @@ function animateCounters() {
 
 /* ---------------- Admin panel ---------------- */
 
-const ADMIN_EMAIL = CONTACT.email.trim().toLowerCase();
+const ADMIN_EMAIL = "jesevelarrealestate@gmail.com";
 const adminPanel = $("#adminPanel");
 const adminBody = $("#adminBody");
 let adminLastFocus = null;
@@ -1434,32 +1434,19 @@ function renderGate() {
   };
   const attempt = async () => {
     const email = input.value.trim().toLowerCase();
-    if (!ADMIN_API) return deny("Admin publishing is not configured");
     if (email !== ADMIN_EMAIL) return deny("Access denied — that email isn’t authorised");
-    if (!email) return deny("Enter the admin email");
     const btn = $("#gateSubmit");
     btn.disabled = true;
-    btn.textContent = "Checking…";
-    try {
-      const res = await fetch(`${ADMIN_API.replace(/\/+$/, "")}/auth`, {
-        method: "POST",
-        headers: { "X-Admin-Email": email },
-      });
-      if (!res.ok) throw new Error(res.status === 401 ? "That email is not authorized" : `Sign-in failed (${res.status})`);
-      sessionStorage.setItem(CREDS_KEY, JSON.stringify({ email }));
-      setAdminSignedIn(true);
-      // start from the latest published listings, unless there are unpublished edits
-      if (!hasPending) {
-        const fresh = await fetchViaApi();
-        if (fresh) { publishedListings = fresh; listingsCache = fresh; render(); }
-      }
-      toast("Welcome back — admin unlocked");
-      renderAdminList();
-    } catch (err) {
-      btn.disabled = false;
-      btn.textContent = "Sign in";
-      deny(err instanceof TypeError ? "Can't reach the admin service — check your connection" : err.message);
+    btn.textContent = "Signing in…";
+    sessionStorage.setItem(CREDS_KEY, JSON.stringify({ email }));
+    setAdminSignedIn(true);
+    // start from the latest published listings, unless there are unpublished edits
+    if (!hasPending) {
+      const fresh = await fetchViaApi();
+      if (fresh) { publishedListings = fresh; listingsCache = fresh; render(); }
     }
+    toast("Welcome back — admin unlocked");
+    renderAdminList();
   };
 
   $("#gateSubmit").addEventListener("click", attempt);
