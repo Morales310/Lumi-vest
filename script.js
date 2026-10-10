@@ -235,49 +235,466 @@ const storage = {
   set(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch {
+      return false; // storage full / blocked
+    }
+  },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
     } catch {
       /* ignore */
     }
   },
 };
 
+const esc = (s) =>
+  String(s == null ? "" : s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+
 let saved = new Set(storage.get("lumivest:saved", []));
 
 const persistSaved = () => storage.set("lumivest:saved", [...saved]);
 
-/* ---------------- Listings store ---------------- */
+/* ---------------- Listings store + GitHub publishing ---------------- */
 
-const LISTINGS_KEY = "lumivest:listings";
+/*
+  How publishing works
+  - The public site reads listings.json (same folder as index.html).
+  - When the owner edits listings in the admin panel, the working copy is shown
+    instantly in their browser and committed to the GitHub repository through the
+    GitHub Contents API. New photos / videos are committed as real files in
+    img/listings/ so listings.json stays small.
+  - Visitors see the change as soon as the host (GitHub Pages / Netlify / Vercel)
+    redeploys the new commit — usually under a minute.
+  - The GitHub access token stays in the publishing worker, never in the browser.
+*/
+
+const PENDING_KEY = "lumivest:pending"; // unpublished working copy (this browser only)
+const LEGACY_KEY = "lumivest:listings"; // older builds saved edits straight here
+/* Set this to the deployed worker URL. The worker keeps the GitHub token server-side. */
+const ADMIN_API = "https://lumi-vest-admin.lumi-vest.workers.dev";
+const CREDS_KEY = "lumivest:creds";
+const adminCreds = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem(CREDS_KEY)) || null;
+  } catch {
+    return null;
+  }
+};
+
+const PUBLISH = {
+  file: "listings.json",
+  mediaDir: "img/listings",
+  maxVideoMB: 25,
+};
+
 let publishedListings = null;
 let listingsCache = null;
+let hasPending = false;
+let publishing = false;
+let queued = false;
+let publishTimer = null;
+let lastPublishError = "";
+let warnedLocalOnly = false;
+
+const pubStatusEl = $("#pubStatus");
 
 const defaultListings = () => JSON.parse(JSON.stringify(PROPERTIES));
 
 function getListings() {
   if (!listingsCache) {
-    const local = storage.get(LISTINGS_KEY, null);
-    if (Array.isArray(local) && local.length) listingsCache = local;
-    else if (Array.isArray(publishedListings) && publishedListings.length)
-      listingsCache = publishedListings;
-    else listingsCache = defaultListings();
+    listingsCache = Array.isArray(publishedListings)
+      ? publishedListings
+      : defaultListings();
   }
   return listingsCache;
 }
 
-function saveListings(list) {
-  listingsCache = list;
-  storage.set(LISTINGS_KEY, list);
+/* --- media helpers --- */
+function kindOf(m) {
+  const src = (m && m.src) || "";
+  if (/^data:video\//i.test(src)) return "video";
+  if (/^data:image\//i.test(src)) return "image";
+  if (/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(src)) return "video";
+  if (/\.(jpe?g|png|webp|gif|avif|svg)(\?|#|$)/i.test(src)) return "image";
+  return m && m.type === "video" ? "video" : "image";
 }
 
-async function loadPublished() {
+function videoMime(src = "") {
+  const d = /^data:(video\/[^;,]+)/i.exec(src);
+  if (d) return d[1];
+  if (/\.webm(\?|#|$)/i.test(src)) return "video/webm";
+  return "video/mp4";
+}
+
+/* What actually gets written to listings.json: uploaded files are referenced by
+   their repo path (m.pub), everything else keeps its own src. */
+function serialize(list) {
+  return list.map((p) => ({
+    ...p,
+    media: (p.media || []).map((m) => ({ type: m.type, src: m.pub || m.src })),
+  }));
+}
+
+/* --- pending (unpublished) copy --- */
+function readPending() {
+  const p = storage.get(PENDING_KEY, null);
+  if (Array.isArray(p)) return p;
+  // Older builds kept edits only in localStorage — rescue them so nothing is lost.
+  const legacy = storage.get(LEGACY_KEY, null);
+  if (Array.isArray(legacy) && legacy.length) {
+    if (storage.set(PENDING_KEY, legacy)) storage.remove(LEGACY_KEY);
+    return legacy;
+  }
+  return null;
+}
+
+function writePending(list) {
+  hasPending = true;
+  storage.set(PENDING_KEY, serialize(list)); // best effort (can exceed quota with big videos)
+  updateAdminVisibility();
+}
+
+function clearPending() {
+  storage.remove(PENDING_KEY);
+  hasPending = false;
+  updateAdminVisibility();
+}
+
+function saveListings(list) {
+  listingsCache = list;
+  writePending(list);
+  schedulePublish();
+}
+
+/* --- loading --- */
+async function fetchPublic() {
   try {
-    const res = await fetch("listings.json", { cache: "no-store" });
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`${PUBLISH.file}?v=${Date.now()}`, {
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length) publishedListings = data;
+      if (Array.isArray(data)) return data;
     }
   } catch {
-    /* no published listings.json — fall back to defaults */
+    /* no published listings.json — fall back to the built-in starter listings */
+  }
+  return null;
+}
+
+async function fetchViaApi() {
+  // Admin reads through the relay so edits start from the latest commit.
+  try {
+    const res = await gh(ghContents(PUBLISH.file), { raw: true, timeout: 6000 });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch {
+    /* fall back to the public copy */
+  }
+  return null;
+}
+
+async function loadListings() {
+  let remote = null;
+  if (ghReady()) remote = await fetchViaApi();
+  if (!remote) remote = await fetchPublic();
+  publishedListings = remote;
+  listingsCache = null;
+  hasPending = false;
+
+  const pending = readPending();
+  if (pending) {
+    listingsCache = pending;
+    hasPending = true;
+  }
+}
+
+async function discardPending() {
+  clearPending();
+  lastPublishError = "";
+  await loadListings();
+  render();
+  syncPubStatus();
+}
+
+/* ---------------- GitHub publishing relay ---------------- */
+
+const ghReady = () => Boolean(ADMIN_API && adminCreds());
+
+class GhError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const encPath = (p) => p.split("/").map(encodeURIComponent).join("/");
+const ghContents = (p = "") => `/contents${p ? "/" + encPath(p) : ""}`;
+
+async function gh(path, opts = {}) {
+  if (!ADMIN_API) throw new GhError("Publishing service is not configured", 0);
+  const headers = {
+    Accept: opts.raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
+  };
+  const c = adminCreds() || {};
+  headers["X-Admin-Email"] = c.email || "";
+  if (opts.body) headers["Content-Type"] = "application/json";
+
+  const ctrl = new AbortController();
+  const timer = opts.timeout ? setTimeout(() => ctrl.abort(), opts.timeout) : null;
+  try {
+    const base = ADMIN_API.replace(/\/+$/, "");
+    return await fetch(`${base}${path}`, {
+      method: opts.method || "GET",
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+  } catch {
+    throw new GhError("Can't reach GitHub — check your internet connection", 0);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function ghError(res, action) {
+  let detail = "";
+  try {
+    detail = ((await res.json()) || {}).message || "";
+  } catch {
+    /* no body */
+  }
+  const status = res.status;
+  let msg;
+  if (status === 401)
+    msg = "your session is no longer valid — sign in again.";
+  else if (status === 403 && /rate limit/i.test(detail))
+    msg = "GitHub rate limit reached — wait a few minutes and try again.";
+  else if (status === 403 || status === 404)
+    msg =
+      "the worker or GitHub token rejected the request. Check its repository and Contents read/write permission.";
+  else if (status === 409) msg = "the repository changed while publishing — try again.";
+  else if (status === 413) msg = "that file is too large for GitHub's API.";
+  else msg = detail || `GitHub returned ${status}`;
+  return new GhError(`${action}: ${msg}`, status);
+}
+
+/* sha of a file, read from its parent folder listing (works for files of any size) */
+async function ghFileSha(filePath) {
+  const i = filePath.lastIndexOf("/");
+  const dir = i >= 0 ? filePath.slice(0, i) : "";
+  const name = filePath.slice(i + 1);
+  const res = await gh(ghContents(dir));
+  if (res.status === 404) return null;
+  if (!res.ok) throw await ghError(res, "Reading the repository");
+  const list = await res.json();
+  const hit = Array.isArray(list)
+    ? list.find((f) => f.name === name && f.type === "file")
+    : null;
+  return hit ? hit.sha : null;
+}
+
+function ghPutFile(filePath, base64, message, sha) {
+  return gh(ghContents(filePath), {
+    method: "PUT",
+    body: { message, content: base64, ...(sha ? { sha } : {}) },
+  });
+}
+
+async function withRetry(fn, tries = 3) {
+  for (let i = 0; ; i++) {
+    const res = await fn();
+    if (res.status !== 409 || i >= tries - 1) return res;
+    await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+  }
+}
+
+function b64FromString(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function hashStr(str) {
+  // cyrb53 — small, fast, good enough to name files by content
+  let h1 = 0xdeadbeef,
+    h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+const slug = (v) =>
+  String(v)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "listing";
+
+const EXT = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+};
+
+async function uploadMedia(listing, media) {
+  const comma = media.src.indexOf(",");
+  const mime = media.src.slice(5, comma).split(";")[0].toLowerCase();
+  const b64 = media.src.slice(comma + 1);
+  if (comma < 0 || !b64) throw new Error("One of the uploaded files could not be read");
+
+  const ext = EXT[mime] || (media.type === "video" ? "mp4" : "jpg");
+  const name = `${slug(listing.id)}-${hashStr(b64)}${b64.length.toString(36)}.${ext}`;
+  const filePath = `${PUBLISH.mediaDir}/${name}`;
+
+  const res = await withRetry(() =>
+    ghPutFile(filePath, b64, `Add ${media.type} for “${listing.title}”`)
+  );
+  if (res.status === 422) {
+    // same content already committed under this name -> reuse it
+    const d = await res.json().catch(() => ({}));
+    if (!/sha/i.test(d.message || ""))
+      throw new GhError(`Uploading ${media.type}: ${d.message || "GitHub refused the file"}`, 422);
+  } else if (!res.ok) {
+    throw await ghError(res, `Uploading ${media.type}`);
+  }
+  media.pub = filePath;
+}
+
+/* --- status chip in the admin header --- */
+function setPubStatus(kind, text) {
+  if (!pubStatusEl) return;
+  pubStatusEl.hidden = !text;
+  pubStatusEl.className = "pub-status" + (kind ? ` is-${kind}` : "");
+  pubStatusEl.dataset.kind = kind || "";
+  pubStatusEl.textContent = text || "";
+}
+
+function syncPubStatus() {
+  if (publishing) return;
+  if (!ghReady())
+    return hasPending
+      ? setPubStatus("warn", "Saved here only — publishing unavailable")
+      : setPubStatus("", "");
+  if (lastPublishError) return setPubStatus("error", "Publish failed — click to retry");
+  if (hasPending) return setPubStatus("warn", "Unpublished changes — click to publish");
+  setPubStatus("", "");
+}
+
+if (pubStatusEl)
+  pubStatusEl.addEventListener("click", () => {
+    if (!ghReady()) renderGate();
+    else publishNow(true);
+  });
+
+/* --- the publish pipeline --- */
+function schedulePublish() {
+  if (!ghReady()) {
+    syncPubStatus();
+    if (!warnedLocalOnly) {
+      warnedLocalOnly = true;
+      toast("Saved in this browser only — publishing service is unavailable", "warn");
+    }
+    return;
+  }
+  setPubStatus("busy", "Changes pending…");
+  clearTimeout(publishTimer);
+  publishTimer = setTimeout(() => publishNow(), 1200);
+}
+
+async function publishNow(manual = false) {
+  clearTimeout(publishTimer);
+  if (!ghReady()) {
+    if (manual) renderGate();
+    return;
+  }
+  if (publishing) {
+    queued = true;
+    return;
+  }
+  publishing = true;
+  queued = false;
+  lastPublishError = "";
+
+  try {
+    const list = getListings();
+
+    // 1) photos / videos that were uploaded in the admin become real files in the repo
+    const todo = [];
+    list.forEach((p) =>
+      (p.media || []).forEach((m) => {
+        if (m.src && m.src.startsWith("data:") && !m.pub) todo.push([p, m]);
+      })
+    );
+    let n = 0;
+    for (const [p, m] of todo) {
+      n++;
+      setPubStatus(
+        "busy",
+        `Uploading ${m.type === "video" ? "video" : "photo"} ${n} of ${todo.length}…`
+      );
+      await uploadMedia(p, m);
+    }
+
+    // 2) commit listings.json
+    setPubStatus("busy", "Publishing listings…");
+    const out = serialize(list);
+    if (out.some((p) => p.media.some((m) => String(m.src).startsWith("data:"))))
+      throw new Error("A photo is still embedded — please try again");
+    const text = JSON.stringify(out, null, 2) + "\n";
+    const count = out.filter((p) => !p.draft).length;
+
+    const res = await withRetry(async () => {
+      const sha = await ghFileSha(PUBLISH.file);
+      return ghPutFile(
+        PUBLISH.file,
+        b64FromString(text),
+        `Update listings via admin (${count} live)`,
+        sha
+      );
+    });
+    if (!res.ok) throw await ghError(res, "Publishing listings");
+
+    if (!queued) clearPending();
+    setPubStatus("ok", "Committed to GitHub");
+    toast("Changes committed to GitHub — site update follows its deployment");
+  } catch (err) {
+    lastPublishError = err.message || "Unknown error";
+    setPubStatus("error", "Publish failed — click to retry");
+    toast(lastPublishError, "error");
+    if (err.status === 401) {
+      try { sessionStorage.removeItem(CREDS_KEY); } catch {}
+      setAdminSignedIn(false);
+      if (adminPanel.classList.contains("is-open")) renderGate();
+    }
+  } finally {
+    publishing = false;
+    refreshGhCard();
+    if (queued) schedulePublish();
   }
 }
 
@@ -285,15 +702,15 @@ async function loadPublished() {
 
 const toastsEl = $("#toasts");
 
-function toast(message) {
+function toast(message, kind) {
   const el = document.createElement("div");
-  el.className = "toast";
+  el.className = "toast" + (kind ? ` toast--${kind}` : "");
   el.textContent = message;
   toastsEl.appendChild(el);
   setTimeout(() => {
     el.classList.add("is-leaving");
     el.addEventListener("animationend", () => el.remove(), { once: true });
-  }, 3000);
+  }, kind === "error" ? 7000 : 3000);
 }
 
 /* ---------------- Categories ---------------- */
@@ -372,14 +789,14 @@ function priceHTML(p) {
   if (p.mode === "rent")
     return `<strong>${naira(p.price)}</strong> <span>/ year</span>`;
   return `<strong>${naira(p.price)}</strong> ${
-    p.priceNote ? `<span>· ${p.priceNote}</span>` : ""
+    p.priceNote ? `<span>· ${esc(p.priceNote)}</span>` : ""
   }`;
 }
 
 function slideHTML(m, p) {
   if (m.type === "video")
-    return `<div class="card-slide"><video muted loop playsinline preload="metadata"><source src="${m.src}" type="video/mp4"></video></div>`;
-  return `<div class="card-slide"><img src="${m.src}" alt="${p.title}" loading="lazy"></div>`;
+    return `<div class="card-slide"><video muted loop playsinline preload="metadata"><source src="${esc(m.src)}" type="${videoMime(m.src)}"></video></div>`;
+  return `<div class="card-slide"><img src="${esc(m.src)}" alt="${esc(p.title)}" loading="lazy"></div>`;
 }
 
 function cardHTML(p, i) {
@@ -403,22 +820,22 @@ function cardHTML(p, i) {
          <button type="button" class="card-arrow card-arrow--next" data-dir="1" aria-label="Next photo">${svg("right")}</button>`
       : "";
 
-  return `<article class="card reveal" data-id="${p.id}" style="--d:${(i % 4) * 0.08}s">
-    <div class="card-media" role="button" tabindex="0" aria-label="View ${p.title}">
-      <span class="${badgeCls}">${p.badge}</span>
+  return `<article class="card reveal" data-id="${esc(p.id)}" style="--d:${(i % 4) * 0.08}s">
+    <div class="card-media" role="button" tabindex="0" aria-label="View ${esc(p.title)}">
+      <span class="${badgeCls}">${esc(p.badge)}</span>
       <button type="button" class="card-heart${liked}" aria-label="Save to wishlist">${svg("heart")}</button>
       <div class="card-track">${p.media.map((m) => slideHTML(m, p)).join("")}</div>
       ${arrows}
       ${dots}
     </div>
     <div class="card-title-row">
-      <h3 class="card-title">${p.title}</h3>
+      <h3 class="card-title">${esc(p.title)}</h3>
       <span class="card-rating">${rating}</span>
     </div>
-    <p class="card-location">${p.location}</p>
+    <p class="card-location">${esc(p.location)}</p>
     <p class="card-details">${p.beds} bed${p.beds > 1 ? "s" : ""} · ${
       p.baths
-    } bath${p.baths > 1 ? "s" : ""} · ${p.size}</p>
+    } bath${p.baths > 1 ? "s" : ""} · ${esc(p.size)}</p>
     <p class="card-price">${priceHTML(p)}</p>
   </article>`;
 }
@@ -620,8 +1037,8 @@ let currentSlide = 0;
 
 function mediaEl(m, p, cls) {
   if (m.type === "video")
-    return `<video ${cls} muted loop playsinline preload="metadata" data-kind="video"><source src="${m.src}" type="video/mp4"></video>`;
-  return `<img ${cls} src="${m.src}" alt="${p.title}">`;
+    return `<video ${cls} muted loop playsinline preload="metadata" data-kind="video"><source src="${esc(m.src)}" type="${videoMime(m.src)}"></video>`;
+  return `<img ${cls} src="${esc(m.src)}" alt="${esc(p.title)}">`;
 }
 
 function modalHTML(p) {
@@ -655,23 +1072,23 @@ function modalHTML(p) {
   <div class="mb">
     <div class="mb-main">
       <div class="mb-head">
-        <h2 id="modalTitleStatic">${p.title}</h2>
+        <h2 id="modalTitleStatic">${esc(p.title)}</h2>
         <div class="mb-meta">
-          ${rating}<span class="dot"></span><span>${p.location}</span>
-          <span class="${statusCls}">${p.status}</span>
+          ${rating}<span class="dot"></span><span>${esc(p.location)}</span>
+          <span class="${statusCls}">${esc(p.status)}</span>
         </div>
       </div>
 
       <div class="mb-facts">
         <div class="fact"><strong>${p.beds}</strong><span>Bedroom${p.beds > 1 ? "s" : ""}</span></div>
         <div class="fact"><strong>${p.baths}</strong><span>Bathroom${p.baths > 1 ? "s" : ""}</span></div>
-        <div class="fact"><strong>${p.parking.replace(" cars", "").replace(" car", "")}</strong><span>Parking</span></div>
-        <div class="fact"><strong>${p.size}</strong><span>Land size</span></div>
+        <div class="fact"><strong>${esc(String(p.parking || "—").replace(" cars", "").replace(" car", ""))}</strong><span>Parking</span></div>
+        <div class="fact"><strong>${esc(p.size)}</strong><span>Land size</span></div>
       </div>
 
-      <p class="mb-desc">${p.desc}</p>
+      <p class="mb-desc">${esc(p.desc)}</p>
 
-      <ul class="mb-highlights">${p.highlights.map((h) => `<li>${h}</li>`).join("")}</ul>
+      <ul class="mb-highlights">${(p.highlights || []).map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
 
       <div class="mb-host">
         <img src="${CONTACT.hostPhoto}" alt="${CONTACT.hostName}">
@@ -692,15 +1109,15 @@ function modalHTML(p) {
         <p class="booking-note">${
           p.mode === "rent"
             ? "Annual rent · inspection free"
-            : p.priceNote || "Sale price · slight negotiation on inspection"
+            : esc(p.priceNote) || "Sale price · slight negotiation on inspection"
         }</p>
 
         <div class="booking-rows">
-          <div class="booking-row"><span>Status</span><strong>${p.status}</strong></div>
+          <div class="booking-row"><span>Status</span><strong>${esc(p.status)}</strong></div>
           <div class="booking-row"><span>Property type</span><strong>${
             p.type === "house" ? "House / bungalow" : "Apartment"
           }</strong></div>
-          <div class="booking-row"><span>Location</span><strong>${p.location}</strong></div>
+          <div class="booking-row"><span>Location</span><strong>${esc(p.location)}</strong></div>
         </div>
 
         <button type="button" class="btn btn-gradient" id="requestViewing">Request a viewing</button>
@@ -934,17 +1351,9 @@ const adminPanel = $("#adminPanel");
 const adminBody = $("#adminBody");
 let adminLastFocus = null;
 
-const esc = (s = "") =>
-  String(s).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
-        c
-      ])
-  );
-
 function adminSignedIn() {
   try {
+    if (!adminCreds()) return false;
     return sessionStorage.getItem("lumivest:admin") === "1";
   } catch {
     return false;
@@ -952,6 +1361,9 @@ function adminSignedIn() {
 }
 
 function setAdminSignedIn(v) {
+  if (!v) {
+    try { sessionStorage.removeItem(CREDS_KEY); } catch {}
+  }
   try {
     v
       ? sessionStorage.setItem("lumivest:admin", "1")
@@ -959,6 +1371,19 @@ function setAdminSignedIn(v) {
   } catch {
     /* ignore */
   }
+  updateAdminVisibility();
+}
+
+/* The menu entry is public; the publishing worker protects admin operations. */
+function updateAdminVisibility() {
+  const wrap = $("#menuAdminWrap");
+  if (wrap) wrap.hidden = false;
+}
+
+function checkAdminHash() {
+  if (location.hash.replace("#", "") !== "admin") return;
+  history.replaceState(null, "", location.pathname + location.search);
+  openAdmin();
 }
 
 function openAdmin() {
@@ -967,6 +1392,7 @@ function openAdmin() {
   adminPanel.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
   adminSignedIn() ? renderAdminList() : renderGate();
+  syncPubStatus();
 }
 
 function closeAdmin() {
@@ -985,42 +1411,82 @@ document.addEventListener("keydown", (e) => {
     closeAdmin();
 });
 
-/* --- email gate --- */
+/* --- sign-in gate --- */
 function renderGate() {
+  adminBody.onclick = null;
   adminBody.innerHTML = `
     <div class="gate">
       <div class="gate-lock">🔒</div>
       <h3>Admin access</h3>
-      <p>Sign in with the owner account to add, edit and remove listings.</p>
-      <input type="email" id="gateEmail" placeholder="example@gmail.com" autocomplete="off">
+      <p>Sign in with the authorized admin email to manage listings.</p>
+      <input type="email" id="gateEmail" placeholder="admin email" autocomplete="username">
       <button class="btn btn-gradient" id="gateSubmit">Sign in</button>
-      <p class="gate-hint">Restricted to Admin</p>
+      <p class="gate-hint">Restricted to authorised admins</p>
     </div>`;
 
   const input = $("#gateEmail");
-  const attempt = () => {
-    const val = input.value.trim().toLowerCase();
-    if (val === ADMIN_EMAIL) {
+  const deny = (msg) => {
+    input.classList.remove("shake");
+    void input.offsetWidth;
+    input.classList.add("shake");
+    toast(msg, "error");
+    input.select();
+  };
+  const attempt = async () => {
+    const email = input.value.trim().toLowerCase();
+    if (!ADMIN_API) return deny("Admin publishing is not configured");
+    if (email !== ADMIN_EMAIL) return deny("Access denied — that email isn’t authorised");
+    if (!email) return deny("Enter the admin email");
+    const btn = $("#gateSubmit");
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    try {
+      const res = await fetch(`${ADMIN_API.replace(/\/+$/, "")}/auth`, {
+        method: "POST",
+        headers: { "X-Admin-Email": email },
+      });
+      if (!res.ok) throw new Error(res.status === 401 ? "That email is not authorized" : `Sign-in failed (${res.status})`);
+      sessionStorage.setItem(CREDS_KEY, JSON.stringify({ email }));
       setAdminSignedIn(true);
+      // start from the latest published listings, unless there are unpublished edits
+      if (!hasPending) {
+        const fresh = await fetchViaApi();
+        if (fresh) { publishedListings = fresh; listingsCache = fresh; render(); }
+      }
       toast("Welcome back — admin unlocked");
       renderAdminList();
-    } else {
-      input.classList.remove("shake");
-      void input.offsetWidth;
-      input.classList.add("shake");
-      toast("Access denied — that email isn’t authorised");
-      input.select();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Sign in";
+      deny(err instanceof TypeError ? "Can't reach the admin service — check your connection" : err.message);
     }
   };
 
   $("#gateSubmit").addEventListener("click", attempt);
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      attempt();
-    }
+    if (e.key === "Enter") { e.preventDefault(); attempt(); }
   });
   input.focus();
+}
+
+/* --- GitHub status card --- */
+function ghCardHTML() {
+  const who = (adminCreds() || {}).email || "";
+  return `
+    <div class="gh-card" id="ghCard">
+      <div>
+        <strong>${ADMIN_API ? "Publishing to GitHub" : "Publishing service not configured"}</strong>
+        <span>${ADMIN_API ? `Signed in as <b>${esc(who)}</b>.` : "Set ADMIN_API in script.js to the deployed worker URL."} Every change and uploaded photo or video is committed to the repository; visitors see it after the site redeploys.</span>
+        ${lastPublishError ? `<span style="color:#ff8a8e">${esc(lastPublishError)}</span>` : ""}
+      </div>
+      <div class="gh-card-actions"><button class="btn btn-ghost btn-sm" data-gh="publish">Publish now</button></div>
+    </div>`;
+}
+
+function refreshGhCard() {
+  const el = $("#ghCard");
+  if (el) el.outerHTML = ghCardHTML();
+  syncPubStatus();
 }
 
 /* --- dashboard --- */
@@ -1029,17 +1495,16 @@ function renderAdminList() {
   const list = getListings();
 
   adminBody.innerHTML = `
+    ${ghCardHTML()}
     <div class="admin-toolbar">
       <button class="btn btn-gradient btn-sm" id="adminAdd">+ Add listing</button>
       <div class="admin-tools">
-        <button class="btn btn-ghost btn-sm" id="adminExport">Export</button>
-        <button class="btn btn-ghost btn-sm" id="adminPublish">listings.json</button>
+        <button class="btn btn-ghost btn-sm" id="adminExport">Backup</button>
         <button class="btn btn-ghost btn-sm" id="adminImport">Import</button>
-        <button class="btn btn-ghost btn-sm" id="adminReset">Reset</button>
+        ${hasPending ? '<button class="btn btn-ghost btn-sm" id="adminDiscard">Discard unpublished</button>' : ""}
         <button class="btn btn-ghost btn-sm" id="adminLogout">Sign out</button>
       </div>
     </div>
-    <p class="admin-note">Changes apply instantly in this browser. To publish them for every visitor, click <b>listings.json</b>, then upload that file to the site root (drag &amp; drop it on Netlify, or commit it to the repo).</p>
     <div class="admin-import" id="adminImportBox" hidden>
       <textarea id="adminImportText" rows="5" placeholder='Paste exported listings JSON here…'></textarea>
       <button class="btn btn-dark btn-sm" id="adminImportApply">Replace listings</button>
@@ -1072,10 +1537,7 @@ function renderAdminList() {
 
   $("#adminAdd").addEventListener("click", () => renderForm(null));
   $("#adminExport").addEventListener("click", () =>
-    downloadJSON("lumivest-listings.json", getListings())
-  );
-  $("#adminPublish").addEventListener("click", () =>
-    downloadJSON("listings.json", getListings())
+    downloadJSON("lumivest-listings.json", serialize(getListings()))
   );
   $("#adminImport").addEventListener("click", () => {
     const box = $("#adminImportBox");
@@ -1083,7 +1545,14 @@ function renderAdminList() {
     if (!box.hidden) $("#adminImportText").focus();
   });
   $("#adminImportApply").addEventListener("click", importListings);
-  $("#adminReset").addEventListener("click", resetListings);
+  const discard = $("#adminDiscard");
+  if (discard)
+    discard.addEventListener("click", async () => {
+      if (!confirm("Discard the changes that haven't been published yet?")) return;
+      await discardPending();
+      renderAdminList();
+      toast("Unpublished changes discarded");
+    });
   $("#adminLogout").addEventListener("click", () => {
     setAdminSignedIn(false);
     renderGate();
@@ -1091,6 +1560,12 @@ function renderAdminList() {
   });
 
   adminBody.onclick = (e) => {
+    const g = e.target.closest("[data-gh]");
+    if (g) {
+      publishNow(true);
+      return;
+    }
+
     const btn = e.target.closest("[data-act]");
     if (!btn || btn.disabled) return;
     const row = btn.closest(".admin-row");
@@ -1117,7 +1592,7 @@ function renderAdminList() {
       toast(current[idx].draft ? "Moved to drafts" : "Published");
     }
     if (act === "del") {
-      if (!confirm(`Delete “${current[idx].title}”? This cannot be undone.`))
+      if (!confirm(`Delete “${current[idx].title}”? It will disappear for all visitors.`))
         return;
       current.splice(idx, 1);
       toast("Listing deleted");
@@ -1127,13 +1602,57 @@ function renderAdminList() {
     render();
     renderAdminList();
   };
+  syncPubStatus();
+}
+
+/* --- image / file helpers --- */
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("Could not read that file"));
+    r.readAsDataURL(file);
+  });
+}
+
+// Shrinks phone photos (often 4–8 MB) to ~150–300 KB before they go to GitHub
+async function compressImage(file, maxSide = 1600, quality = 0.82) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Could not read that image"));
+      i.src = url;
+    });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; // flatten transparency for JPEG
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", quality);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function sizeLabel(dataUri) {
+  const bytes = (dataUri.length * 3) / 4;
+  return bytes > 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /* --- add / edit form --- */
 function renderForm(p) {
   adminBody.onclick = null;
   const isNew = !p;
-  const media = p ? JSON.parse(JSON.stringify(p.media)) : [];
+  const media = p ? JSON.parse(JSON.stringify(p.media || [])) : [];
   const highlights = p && Array.isArray(p.highlights) ? p.highlights.join("\n") : "";
   const statusOptions = [
     "For Sale",
@@ -1141,6 +1660,7 @@ function renderForm(p) {
     "Under Construction",
     "Distress Sale",
   ];
+  if (p && p.status && !statusOptions.includes(p.status)) statusOptions.push(p.status);
 
   adminBody.innerHTML = `
     <button class="admin-back-link" id="formBack">← All listings</button>
@@ -1166,10 +1686,7 @@ function renderForm(p) {
       <label>Status
         <select id="aStatus">
           ${statusOptions
-            .map(
-              (s) =>
-                `<option ${p?.status === s ? "selected" : ""}>${s}</option>`
-            )
+            .map((s) => `<option ${p?.status === s ? "selected" : ""}>${esc(s)}</option>`)
             .join("")}
         </select>
       </label>
@@ -1189,16 +1706,17 @@ function renderForm(p) {
       <textarea id="aHighlights" rows="4" placeholder="Borehole water\nFenced & gated">${esc(highlights)}</textarea>
     </label>
 
-    <label class="form-check"><input type="checkbox" id="aAlert" ${p?.alert ? "checked" : ""}> Red “distress sale” badge</label>
+    <label class="form-check"><input type="checkbox" id="aAlert" ${p?.alert ? "checked" : ""}> Gold “distress sale” badge</label>
     <label class="form-check"><input type="checkbox" id="aDraft" ${p?.draft ? "checked" : ""}> Save as draft (hidden from visitors)</label>
 
     <div class="admin-media">
       <h4>Photos &amp; videos</h4>
       <div id="adminMediaRows"></div>
       <div class="media-add">
+        <label class="btn btn-ghost btn-sm file-label">Upload photos<input type="file" id="mUpload" accept="image/*" multiple hidden></label>
+        <label class="btn btn-ghost btn-sm file-label">Upload video<input type="file" id="mUploadVid" accept="video/mp4,video/webm,video/quicktime" hidden></label>
         <button type="button" class="btn btn-ghost btn-sm" id="mAddImg">+ Image URL</button>
         <button type="button" class="btn btn-ghost btn-sm" id="mAddVid">+ Video URL</button>
-        <label class="btn btn-ghost btn-sm file-label">Upload image<input type="file" id="mUpload" accept="image/*" hidden></label>
       </div>
     </div>
 
@@ -1210,27 +1728,47 @@ function renderForm(p) {
   const rows = $("#adminMediaRows");
 
   function paintMedia() {
-    rows.innerHTML = media
-      .map(
-        (m, i) => `
+    rows.innerHTML =
+      media
+        .map((m, i) => {
+          const embedded = m.src.startsWith("data:");
+          const thumb =
+            m.type === "video"
+              ? '<span class="media-thumb media-thumb--video" aria-hidden="true">▶</span>'
+              : `<img class="media-thumb" src="${esc(m.src)}" alt="" loading="lazy">`;
+          const field = embedded
+            ? `<span class="media-local">${m.type === "video" ? "Video" : "Photo"} · ${sizeLabel(m.src)} · ${
+                m.pub ? "saved to your repository" : "uploads to GitHub when published"
+              }</span>`
+            : `<input data-src value="${esc(m.src)}">`;
+          return `
       <div class="media-row" data-i="${i}">
-        <span class="media-kind ${m.type === "video" ? "video" : ""}">${
-          m.type === "video" ? "VIDEO" : "IMG"
-        }</span>
-        <input data-src value="${esc(m.src)}">
+        ${thumb}
+        <span class="media-kind ${m.type === "video" ? "video" : ""}">${m.type === "video" ? "VIDEO" : "IMG"}</span>
+        ${field}
         <button type="button" data-mact="up" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
         <button type="button" data-mact="down" ${i === media.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
         <button type="button" data-mact="rm" class="danger" aria-label="Remove">✕</button>
-      </div>`
-      )
-      .join("") || '<p class="admin-empty">No media yet — add an image or video.</p>';
+      </div>`;
+        })
+        .join("") || '<p class="admin-empty">No media yet — upload a photo or add a link.</p>';
   }
   paintMedia();
 
   rows.addEventListener("input", (e) => {
     const inp = e.target.closest("[data-src]");
     if (!inp) return;
-    media[Number(inp.closest(".media-row").dataset.i)].src = inp.value.trim();
+    const m = media[Number(inp.closest(".media-row").dataset.i)];
+    m.src = inp.value.trim();
+    delete m.pub;
+  });
+
+  rows.addEventListener("change", (e) => {
+    const inp = e.target.closest("[data-src]");
+    if (!inp) return;
+    const m = media[Number(inp.closest(".media-row").dataset.i)];
+    m.type = kindOf(m);
+    paintMedia();
   });
 
   rows.addEventListener("click", (e) => {
@@ -1261,22 +1799,42 @@ function renderForm(p) {
     }
   });
 
-  $("#mUpload").addEventListener("change", (e) => {
+  $("#mUpload").addEventListener("change", async (e) => {
+    const files = [...(e.target.files || [])];
+    e.target.value = "";
+    let added = 0;
+    for (const file of files) {
+      try {
+        media.push({ type: "image", src: await compressImage(file) });
+        added++;
+      } catch (err) {
+        toast(`${file.name}: ${err.message}`, "error");
+      }
+    }
+    if (added) {
+      paintMedia();
+      toast(added > 1 ? `${added} photos attached` : "Photo attached");
+    }
+  });
+
+  $("#mUploadVid").addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
+    e.target.value = "";
     if (!file) return;
-    if (file.size > 900 * 1024) {
-      toast("Image over 900KB — use a URL instead, or upload a smaller file");
-      e.target.value = "";
+    if (file.size > PUBLISH.maxVideoMB * 1024 * 1024) {
+      toast(
+        `That video is over ${PUBLISH.maxVideoMB} MB — compress it first, or paste a link instead`,
+        "error"
+      );
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      media.push({ type: "image", src: reader.result });
+    try {
+      media.push({ type: "video", src: await fileToDataUrl(file) });
       paintMedia();
-      toast("Image attached");
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
+      toast("Video attached");
+    } catch (err) {
+      toast(err.message, "error");
+    }
   });
 
   $("#aSave").addEventListener("click", () => {
@@ -1284,7 +1842,7 @@ function renderForm(p) {
     const location = $("#aLocation").value.trim();
     const price = Number($("#aPrice").value);
     if (!title || !location || !price) {
-      toast("Title, location and price are required");
+      toast("Title, location and price are required", "error");
       return;
     }
 
@@ -1319,7 +1877,7 @@ function renderForm(p) {
     if (!listing.media.length)
       listing.media = [{ type: "image", src: U("1523217582562-09d0def993a6") }];
     listing.media.forEach((m) => {
-      m.type = /\.mp4(\?|$)/i.test(m.src) ? "video" : "image";
+      m.type = kindOf(m);
     });
 
     const current = getListings();
@@ -1337,7 +1895,7 @@ function renderForm(p) {
   $("#formBack").addEventListener("click", renderAdminList);
 }
 
-/* --- import / export / reset --- */
+/* --- import / backup --- */
 function downloadJSON(name, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json",
@@ -1364,7 +1922,7 @@ function importListings() {
       .map((x) => ({
         ...x,
         media: Array.isArray(x.media)
-          ? x.media.filter((m) => m && m.src)
+          ? x.media.filter((m) => m && m.src).map((m) => ({ type: kindOf(m), src: m.src }))
           : [],
         highlights: Array.isArray(x.highlights) ? x.highlights : [],
       }))
@@ -1375,34 +1933,51 @@ function importListings() {
     renderAdminList();
     toast(`Imported ${cleaned.length} listings`);
   } catch (err) {
-    toast(`Import failed: ${err.message}`);
+    toast(`Import failed: ${err.message}`, "error");
   }
 }
 
-function resetListings() {
-  if (!confirm("Reset to the original listings? Your edits will be lost."))
-    return;
-  try {
-    localStorage.removeItem(LISTINGS_KEY);
-  } catch {
-    /* ignore */
-  }
-  listingsCache = null;
-  publishedListings = null;
-  render();
-  renderAdminList();
-  toast("Listings reset to defaults");
+/* ---------------- Theme toggle ---------------- */
+
+const THEME_KEY = "lumivest:theme";
+
+function applyTheme(theme) {
+  document.documentElement.classList.toggle("light", theme === "light");
 }
+
+// initialise: saved preference, else system preference
+const initialTheme =
+  storage.get(THEME_KEY, null) ||
+  (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+applyTheme(initialTheme);
+
+const themeToggle = $("#themeToggle");
+if (themeToggle)
+  themeToggle.addEventListener("click", () => {
+    const next = document.documentElement.classList.contains("light") ? "dark" : "light";
+    applyTheme(next);
+    storage.set(THEME_KEY, next);
+    toast(next === "light" ? "Light mode on ☀️" : "Dark mode on 🌙");
+  });
+
 
 /* ---------------- Init ---------------- */
 
 async function init() {
-  await loadPublished();
+  await loadListings();
   renderCategories();
   updateSavedCount();
+  updateAdminVisibility();
   render();
   observeReveals();
+
+  // "Curated listings" follows the real number of live listings
+  const stat = $(".stat-num");
+  if (stat) stat.dataset.count = String(getListings().filter((p) => !p.draft).length);
   animateCounters();
+
+  checkAdminHash();
+  window.addEventListener("hashchange", checkAdminHash);
 }
 
 init();
