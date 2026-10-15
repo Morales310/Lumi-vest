@@ -1,0 +1,8 @@
+# Only used if you deploy the site with Cloudflare Workers static assets:
+# keep everything that isn't part of the public website out of the upload.
+node_modules
+worker
+README.md
+.gitignore
+.assetsignore
+.git

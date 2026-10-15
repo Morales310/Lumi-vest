@@ -1,0 +1,8 @@
+# Never commit installed packages or local tooling state. node_modules/workerd/bin/workerd alone
+# is ~129 MB, which GitHub (100 MB) and Cloudflare Pages (25 MiB per file) both reject.
+node_modules/
+.wrangler/
+.dev.vars
+.env
+*.log
+.DS_Store
