@@ -1,155 +1,32 @@
 [
   {
-    "id": "custom-mvgl0bu8",
-    "title": "1 bedroom flat",
-    "location": "NAFDAC,",
-    "type": "apartment",
-    "mode": "sale",
-    "price": 950000,
-    "status": "For Sale",
-    "badge": "New",
-    "alert": false,
-    "rating": null,
-    "reviews": 0,
-    "beds": 1,
-    "baths": 1,
-    "parking": "1 car",
-    "size": "—",
-    "desc": "",
-    "highlights": [],
-    "draft": false,
-    "media": [
-      {
-        "type": "image",
-        "src": "https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80"
-      }
-    ],
-    "priceNote": "950000"
-  },
-  {
-    "id": "custom-mv0rc75x",
-    "title": "3 Bedroom Flat",
-    "location": "Romi Lusawa, Kaduna",
-    "type": "apartment",
-    "mode": "sale",
-    "price": 15000000,
-    "status": "For Sale",
-    "badge": "New",
-    "alert": false,
-    "rating": 5,
-    "reviews": 0,
-    "beds": 3,
-    "baths": 1,
-    "parking": "1 car",
-    "size": "—",
-    "desc": "Tiled asset with water supply which offers privacy in a lively environment",
-    "highlights": [
-      "Fenced",
-      "Gated",
-      "Borehole",
-      "Pop",
-      "Tiles"
-    ],
-    "draft": false,
-    "media": [
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0rc75x-f1e387b492.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0rc75x-f6cafc3220.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0rc75x-73199a5e49.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0rc75x-914db44821.jpg"
-      }
-    ],
-    "priceNote": "15 million Net"
-  },
-  {
-    "id": "custom-mv0r68aw",
-    "title": "2 Bedroom Flat",
-    "location": "Up Market, Goningora, Kaduna",
+    "id": "custom-mv9b89cc",
+    "title": "1 Bedroom Apartment",
+    "location": "Highcost, Near NAFDAC",
     "type": "apartment",
     "mode": "rent",
-    "price": 350000,
+    "price": 900000,
     "status": "For Rent",
     "badge": "New",
     "alert": false,
     "rating": 5,
     "reviews": 0,
-    "beds": 2,
-    "baths": 1,
-    "parking": "1 car",
-    "size": "—",
-    "desc": "fenced, gated ,with water supply,close proximity to the road and market",
-    "highlights": [
-      "Fence",
-      "Gate",
-      "Borehole",
-      "PVC",
-      "Tiles\\Normal floor"
-    ],
-    "draft": false,
-    "media": [
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0r68aw-885898b4af.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0r68aw-9943b5da9e.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0r68aw-c1ea711347.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0r68aw-e3603068aa.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0r68aw-52ca9347ac.jpg"
-      },
-      {
-        "type": "image",
-        "src": "img/listings/custom-mv0r68aw-d244eeedbe.jpg"
-      }
-    ],
-    "priceNote": "350k rent option"
-  },
-  {
-    "id": "custom-mv0qwpo9",
-    "title": "Land for Sale",
-    "location": "Maijero, Kaduna",
-    "type": "apartment",
-    "mode": "sale",
-    "price": 10000000,
-    "status": "For Sale",
-    "badge": "Land",
-    "alert": false,
-    "rating": 3.5,
-    "reviews": 0,
     "beds": 1,
-    "baths": 1,
+    "baths": 2,
     "parking": "1 car",
     "size": "—",
-    "desc": "There is slight room for negotiations",
-    "highlights": [],
+    "desc": "A beautiful standard one bedroom flat, with suspended ceiling ,\nRent 900000 (1 year and 8 months required)\nCaution 150k\nA\\l: 20%\nPlease note: responsible working class single or young couple required, we would prefer someone that will buy over all or some of the items in the apartment.",
+    "highlights": [
+      "Suspended ceiling"
+    ],
     "draft": false,
     "media": [
       {
         "type": "video",
-        "src": "https://videotourl.com/videos/1791536908409-165b0d0c-676a-481c-b5a9-fe0c9ac6ddbc.mp4"
+        "src": "https://videotourl.com/videos/1792056110367-2a957b58-bbd3-48b7-b099-25f2bde53480.mp4"
       }
     ],
-    "priceNote": "10 million per plot"
+    "priceNote": "900000 (1year and 8months required)"
   },
   {
     "id": "bungalow-narayi",
