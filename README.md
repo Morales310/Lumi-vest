@@ -43,3 +43,15 @@ npx vercel --prod
 Phone / WhatsApp / email links point at `+234 916 865 9842` and
 `jesevelarrealestate@gmail.com` — edit `CONTACT` at the top of `script.js`
 and the hard-coded links in `index.html` to change them.
+
+## Cloudflare publishing API
+
+The admin panel sends listing changes through the separate `lumi-vest-publishing-api`
+Worker. Keep this Worker name distinct from any Pages or static-site deployment: a site
+deployment must not replace the API Worker. Its GitHub token is stored only as the
+`GITHUB_TOKEN` Worker secret.
+
+Deploy the Worker from the repository root with Wrangler, then set the secret with
+`npx wrangler secret put GITHUB_TOKEN`. The website's `ADMIN_API` URL is configured near
+the top of `script.js`; site deployments must publish that file without running Wrangler
+against the API Worker.

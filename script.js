@@ -277,7 +277,7 @@ const persistSaved = () => storage.set("lumivest:saved", [...saved]);
 const PENDING_KEY = "lumivest:pending"; // unpublished working copy (this browser only)
 const LEGACY_KEY = "lumivest:listings"; // older builds saved edits straight here
 /* Set this to the deployed worker URL. The worker keeps the GitHub token server-side. */
-const ADMIN_API = "https://lumi-vest-admin.lumi-vest.workers.dev";
+const ADMIN_API = "https://lumi-vest-publishing-api.lumi-vest.workers.dev";
 const CREDS_KEY = "lumivest:creds";
 const adminCreds = () => {
   try {
