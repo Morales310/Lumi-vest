@@ -11,7 +11,7 @@
     ALLOWED_ORIGIN   your site, e.g. https://lumi-vest.vercel.app  (optional, default *)
 */
 
-const ADMIN_EMAIL = "jesevelarrealestate@gmail.com";
+const ADMIN_EMAIL = "jesvelarrealestate@gmail.com";
 
 /* Size limits. GitHub refuses any file over 100 MB and every commit stays in history,
    so the relay refuses big files long before GitHub would. Sizes are DECODED bytes. */

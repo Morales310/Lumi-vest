@@ -4,13 +4,22 @@
 
 :root {
   /* --- gold --- */
-  --accent: #d4af37;
-  --accent-soft: #f0d77a;
-  --accent-deep: #a67c00;
-  --accent-line: rgba(212, 175, 55, 0.3);
-  --grad: linear-gradient(135deg, #f7e08a 0%, #d4af37 50%, #b98a14 100%);
-  --on-gold: #17110a;
-  --gold: #f0c64a;
+  --accent: #39c9f5;
+  --accent-soft: #b9ffff;
+  --accent-deep: #a589ff;
+  --accent-2: #a768f0;
+  --accent-rgb: 57, 201, 245;
+  --accent-line: rgba(57, 201, 245, 0.3);
+  --grad: linear-gradient(135deg, #b9ffff 0%, #39c9f5 45%, #a589ff 100%);
+  --brand-grad: linear-gradient(90deg, #b9ffff 0%, #39c9f5 25%, #a589ff 50%, #c59af5 75%, #a768f0 100%);
+  --on-gold: #0a0907;
+  --gold: #c59af5;
+
+  /* dropdown / native select popups */
+  --menu-bg: #181510;
+  --menu-ink: #f6efdc;
+  --menu-hover: #a589ff;
+  --menu-hover-ink: #0a0907;
 
   /* --- black / surfaces --- */
   --bg: #0a0907;
@@ -39,7 +48,7 @@
   --r-pill: 999px;
 
   --shadow-card: 0 12px 30px rgba(0, 0, 0, 0.55);
-  --shadow-pop: 0 12px 34px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(212, 175, 55, 0.22);
+  --shadow-pop: 0 12px 34px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(var(--accent-rgb), 0.22);
   --shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.5);
 
   --header-h: 80px;
@@ -68,13 +77,25 @@ html.light {
 
   --line: #ddd3bd;
   --line-soft: #e8dfcc;
-  --accent-line: rgba(166, 124, 0, 0.35);
+  --accent: #a768f0;
+  --accent-soft: #6d32c4;
+  --accent-deep: #5b2bb0;
+  --accent-2: #39c9f5;
+  --accent-rgb: 167, 104, 240;
+  --accent-line: rgba(167, 104, 240, 0.4);
+  --gold: #a768f0;
 
-  --on-gold: #17110a;
-  --grad: linear-gradient(135deg, #f2cf5b 0%, #c9a227 50%, #a67c00 100%);
+  --on-gold: #12081f;
+  --grad: linear-gradient(135deg, #39c9f5 0%, #a589ff 50%, #a768f0 100%);
+  --brand-grad: linear-gradient(90deg, #1fa8d6 0%, #7a63e0 40%, #a768f0 70%, #8a3fe0 100%);
+
+  --menu-bg: #ffffff;
+  --menu-ink: #1c1710;
+  --menu-hover: #c59af5;
+  --menu-hover-ink: #12081f;
 
   --shadow-card: 0 12px 30px rgba(60, 45, 10, 0.14);
-  --shadow-pop: 0 12px 34px rgba(60, 45, 10, 0.16), 0 0 0 1px rgba(166, 124, 0, 0.28);
+  --shadow-pop: 0 12px 34px rgba(60, 45, 10, 0.16), 0 0 0 1px rgba(167, 104, 240, 0.3);
   --shadow-soft: 0 2px 10px rgba(60, 45, 10, 0.12);
 
   color-scheme: light;
@@ -88,8 +109,8 @@ html.light .site-header.is-scrolled {
 }
 html.light .hero {
   background:
-    radial-gradient(820px 460px at 88% -6%, rgba(201, 162, 39, 0.16), transparent 62%),
-    radial-gradient(640px 380px at -4% 78%, rgba(166, 124, 0, 0.09), transparent 60%);
+    radial-gradient(820px 460px at 88% -6%, rgba(57, 201, 245, 0.14), transparent 62%),
+    radial-gradient(640px 380px at -4% 78%, rgba(167, 104, 240, 0.10), transparent 60%);
 }
 html.light .marquee {
   background: linear-gradient(90deg, #f3edde, #faf7f0 50%, #f3edde);
@@ -204,11 +225,11 @@ p {
 .btn-gradient {
   background: var(--grad);
   color: var(--on-gold);
-  box-shadow: 0 8px 22px rgba(212, 175, 55, 0.3);
+  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.3);
 }
 
 .btn-gradient:hover {
-  box-shadow: 0 12px 30px rgba(212, 175, 55, 0.45);
+  box-shadow: 0 12px 30px rgba(var(--accent-rgb), 0.45);
 }
 
 .btn-ghost {
@@ -395,6 +416,38 @@ p {
 
 .sf input::placeholder {
   color: var(--faint);
+}
+
+/* native dropdown lists: explicit bg + text so options are always readable */
+.sf select,
+.sort-wrap select,
+.form-grid select {
+  color-scheme: inherit;
+  cursor: pointer;
+}
+
+.sf select option,
+.sf select optgroup,
+.sort-wrap select option,
+.form-grid select option {
+  background-color: var(--menu-bg);
+  color: var(--menu-ink);
+  font-weight: 600;
+}
+
+.sf select option:checked,
+.sf select option:hover,
+.sort-wrap select option:checked,
+.sort-wrap select option:hover,
+.form-grid select option:checked,
+.form-grid select option:hover {
+  background-color: var(--menu-hover);
+  color: var(--menu-hover-ink);
+}
+
+.sf input:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+  box-shadow: 0 0 0 40px var(--menu-bg) inset;
 }
 
 .sf--where {
@@ -758,7 +811,7 @@ p {
   inset: 0 0 40px 60px;
   border-radius: var(--r-xl);
   overflow: hidden;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(212, 175, 55, 0.28);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(var(--accent-rgb), 0.28);
 }
 
 .collage-main img {
@@ -829,7 +882,7 @@ p {
   height: 34px;
   display: grid;
   place-items: center;
-  background: rgba(212, 175, 55, 0.14);
+  background: rgba(var(--accent-rgb), 0.14);
   color: var(--accent);
   font-weight: 800;
   border-radius: 50%;
@@ -975,7 +1028,7 @@ p {
   padding: 0.38rem 0.7rem;
   border-radius: var(--r-pill);
   box-shadow: var(--shadow-soft);
-  border: 1px solid rgba(212, 175, 55, 0.4);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
@@ -1467,7 +1520,7 @@ p {
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
   transform: translateY(16px) scale(0.96);
   transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
 }
 
 .modal.is-open .modal-panel {
@@ -1908,7 +1961,7 @@ p {
 .inquiry input:focus,
 .inquiry textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
 }
 
 .inquiry input::placeholder,
@@ -2311,7 +2364,7 @@ p {
     max-height: 94vh;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
   
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
 }
 
   .modal-content {
@@ -2369,7 +2422,7 @@ p {
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
   transform: translateY(16px) scale(0.97);
   transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
 }
 
 .admin.is-open .admin-panel {
@@ -2600,8 +2653,8 @@ p {
 }
 
 .pill-draft {
-  background: rgba(212, 175, 55, 0.14);
-  border-color: rgba(212, 175, 55, 0.4);
+  background: rgba(var(--accent-rgb), 0.14);
+  border-color: rgba(var(--accent-rgb), 0.4);
   color: var(--accent-soft);
 }
 
@@ -2700,7 +2753,7 @@ p {
 .form-grid select:focus,
 .form-block textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.22);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.22);
 }
 
 .form-block {
@@ -2839,7 +2892,7 @@ p {
     max-height: 96vh;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
   
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
 }
 
   .admin-body {
@@ -2911,17 +2964,10 @@ p {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-   background: linear-gradient(
-    90deg,
-    #B9FFFF 0%,
-    #39C9F5 25%,
-    #A589FF 50%,
-    #C59AF5 75%,
-    #A768F0 100%
-  );
+   background: var(--brand-grad);
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 8px rgba(75,190,255,0.15))
+  filter: drop-shadow(0 0 8px rgba(var(--accent-rgb), 0.18))
 }
 
 .stat-num {
@@ -2933,7 +2979,7 @@ p {
 .hero {
   position: relative;
   background:
-    radial-gradient(820px 460px at 88% -6%, rgba(212, 175, 55, 0.16), transparent 62%),
+    radial-gradient(820px 460px at 88% -6%, rgba(var(--accent-rgb), 0.16), transparent 62%),
     radial-gradient(640px 380px at -4% 78%, rgba(185, 138, 20, 0.1), transparent 60%);
 }
 
@@ -2953,7 +2999,7 @@ p {
 
 .host {
   background:
-    radial-gradient(700px 320px at 12% 0%, rgba(212, 175, 55, 0.09), transparent 70%),
+    radial-gradient(700px 320px at 12% 0%, rgba(var(--accent-rgb), 0.09), transparent 70%),
     var(--soft);
   border-color: var(--accent-line);
 }
@@ -3094,7 +3140,7 @@ p {
   padding: 0.9rem 1rem;
   border: 1px solid var(--accent-line);
   border-radius: var(--r-md);
-  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.02));
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.02));
 }
 
 .gh-card strong {

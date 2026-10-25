@@ -9,7 +9,7 @@
 const CONTACT = {
   phone: "+2349168659842",
   wa: "2349168659842",
-  email: "jesevelarrealestate@gmail.com",
+  email: "jesvelarrealestate@gmail.com",
   hostName: "Jese Velar",
   hostPhoto: "img/jesevelar.jpeg",
 };
@@ -1346,7 +1346,7 @@ function animateCounters() {
 
 /* ---------------- Admin panel ---------------- */
 
-const ADMIN_EMAIL = "jesevelarrealestate@gmail.com";
+const ADMIN_EMAIL = "jesvelarrealestate@gmail.com";
 const adminPanel = $("#adminPanel");
 const adminBody = $("#adminBody");
 let adminLastFocus = null;
