@@ -1061,8 +1061,7 @@ menuDrop.addEventListener("click", (e) => {
   const me = window.LumiAuth && window.LumiAuth.getSession();
   if (!me) return;
   const label = me.name || me.username || me.email || "";
-  const initials =
-    label.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "U";
+  const initials = window.LumiAuth.initialsOf(me);
   const dot = $(".avatar-dot");
   if (dot) dot.textContent = initials;
   const box = $("#menuUser");

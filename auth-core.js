@@ -451,6 +451,7 @@
     startSession: startSession,
     clearSession: clearSession,
     signOut: signOut,
+    initialsOf: initialsOf,
     guard: guard,
     safeNext: safeNext,
     passwordIssues: passwordIssues,
@@ -464,6 +465,27 @@
     cryptoReady: cryptoReady,
     randomId: randomId,
   };
+
+  /* ---------- signed-in UI that must work even if script.js is cached/stale ---------- */
+  function initialsOf(s) {
+    var parts = String((s && (s.name || s.username || s.email)) || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "U";
+    var a = parts[0].charAt(0), b = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
+    return (a + b).toUpperCase();
+  }
+  function paintUser() {
+    var s = getSession();
+    var dot = document.querySelector(".avatar-dot");
+    if (s && dot) dot.textContent = initialsOf(s);
+  }
+  document.addEventListener("DOMContentLoaded", paintUser);
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest('[data-menu="signout"]');
+    if (!a) return;
+    e.preventDefault();
+    e.stopPropagation();
+    signOut();
+  }, true);
 
   var me = document.currentScript;
   if (me && me.hasAttribute("data-guard")) guard();
