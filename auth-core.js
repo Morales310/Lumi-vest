@@ -265,11 +265,9 @@
       if (clean(f.lastName).length < 2) missing.push("Last name");
       if (!PHONE_RE.test(clean(f.phone))) missing.push("Phone number");
       if (clean(f.address).length < 8) missing.push("Address");
-      if (role !== "agent") {
-        var locs = window.NG_LOCATIONS;
-        if (!clean(f.state) || (locs && !locs[clean(f.state)])) missing.push("State");
-        if (!clean(f.lga) || (locs && locs[clean(f.state)] && locs[clean(f.state)].indexOf(clean(f.lga)) === -1)) missing.push("Local government");
-      }
+      var locs = window.NG_LOCATIONS;
+      if (!clean(f.state) || (locs && !locs[clean(f.state)])) missing.push("State");
+      if (!clean(f.lga) || (locs && locs[clean(f.state)] && locs[clean(f.state)].indexOf(clean(f.lga)) === -1)) missing.push("Local government");
       if (missing.length) throw AuthError("missing", "Required details are missing", missing.map(function (m) { return m + " is required"; }));
       var email = normEmail(f.email), username = normUser(f.username);
       var users = getUsers();
@@ -295,7 +293,8 @@
       user.lastName = clean(f.lastName);
       user.phone = clean(f.phone);
       user.address = clean(f.address);
-      if (role !== "agent") { user.state = clean(f.state); user.lga = clean(f.lga); }
+      user.state = clean(f.state);
+      user.lga = clean(f.lga);
       if (role !== "customer") {
         user.verified = false; // licence / CAC details are recorded, not checked (no server)
         if (role === "agent") { user.agency = clean(f.agency); user.licence = clean(f.licence); }

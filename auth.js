@@ -389,12 +389,10 @@
     var addrName = ADDR[role][0].toLowerCase();
     if (!address) bad(f.address, "Required", "Enter your " + addrName);
     else if (address.length < 8) bad(f.address, "Too short", "The " + addrName + " is too short — include street, area and city");
-    if (role !== "agent") {
-      if (!stateEl.value) bad(stateEl, "Required", "Select your state");
-      else if (!LOC[stateEl.value]) bad(stateEl, "Not valid", "Choose a state from the list");
-      if (!lgaEl.value) bad(lgaEl, "Required", "Select your local government area");
-      else if (LOC[stateEl.value] && LOC[stateEl.value].indexOf(lgaEl.value) === -1) bad(lgaEl, "Not valid", "Choose a local government that belongs to " + stateEl.value);
-    }
+    if (!stateEl.value) bad(stateEl, "Required", "Select your state");
+    else if (!LOC[stateEl.value]) bad(stateEl, "Not valid", "Choose a state from the list");
+    if (!lgaEl.value) bad(lgaEl, "Required", "Select your local government area");
+    else if (LOC[stateEl.value] && LOC[stateEl.value].indexOf(lgaEl.value) === -1) bad(lgaEl, "Not valid", "Choose a local government that belongs to " + stateEl.value);
     if (role === "company") {
       if (f.company.value.trim().length < 2) bad(f.company, "Required", "Enter your company’s registered name");
       var reg = f.reg.value.trim();

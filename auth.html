@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css?v=5" />
   <link rel="stylesheet" href="auth.css?v=2" />
-  <script src="auth-core.js?v=2"></script>
+  <script src="auth-core.js?v=3"></script>
 </head>
 <body class="auth-body">
 
@@ -142,7 +142,7 @@
             <div class="input-wrap"><input id="suAddress" name="suAddress" type="text" autocomplete="street-address" placeholder="Street, area, city, state" required aria-describedby="suAddressErr" maxlength="160"/></div>
             <p class="field-err" id="suAddressErr" hidden></p>
           </div>
-          <div class="role-fields" data-for="customer company">
+          <div class="role-fields" data-for="customer agent company">
           <div class="field-grid">
           <div class="field">
             <label for="suState">State</label>
@@ -219,6 +219,6 @@
   </template>
 
   <script src="ng-locations.js?v=1"></script>
-  <script src="auth.js?v=3" defer></script>
+  <script src="auth.js?v=4" defer></script>
 </body>
 </html>
