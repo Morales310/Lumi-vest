@@ -97,7 +97,7 @@
     }
   }
   function clearFieldErrors(form) {
-    $$("input", form).forEach(function (i) { setFieldError(i, ""); });
+    $$("input, select", form).forEach(function (i) { setFieldError(i, ""); });
   }
 
   /* ---------------- theme toggle (same key/behaviour as the site) ---------------- */
@@ -172,16 +172,51 @@
     $("#suLabel").textContent = r === "company" ? "Register company" : "Create " + label + " account";
     $("#siSubmit").dataset.label = $("#siLabel").textContent;
     $("#suSubmit").dataset.label = $("#suLabel").textContent;
+    $("#suAddressLabel").textContent = ADDR[r][0];
+    $("#suAddress").placeholder = ADDR[r][1];
     $$(".role-fields").forEach(function (f) {
       f.hidden = f.dataset.for.split(" ").indexOf(r) === -1;
     });
-    $$(".role-fields input").forEach(function (i) { setFieldError(i, ""); });
+    $$(".role-fields input, .role-fields select").forEach(function (i) { setFieldError(i, ""); });
     hideAlert(siAlert);
     hideAlert(suAlert);
     if (opts && opts.fromUser) {
       try { sessionStorage.setItem("lumivest:auth-role", r); } catch (e) {}
     }
   }
+  /* ---------------- state → local government ---------------- */
+  var LOC = window.NG_LOCATIONS || {};
+  var stateEl = $("#suState"), lgaEl = $("#suLga");
+  Object.keys(LOC).forEach(function (s) {
+    var o = document.createElement("option");
+    o.value = s;
+    o.textContent = s;
+    stateEl.appendChild(o);
+  });
+  stateEl.addEventListener("change", function () {
+    lgaEl.textContent = "";
+    var first = document.createElement("option");
+    first.value = "";
+    first.textContent = stateEl.value ? "Select LGA" : "Select state first";
+    lgaEl.appendChild(first);
+    (LOC[stateEl.value] || []).forEach(function (l) {
+      var o = document.createElement("option");
+      o.value = l;
+      o.textContent = l;
+      lgaEl.appendChild(o);
+    });
+    lgaEl.disabled = !stateEl.value;
+    setFieldError(stateEl, "");
+    setFieldError(lgaEl, "");
+  });
+  lgaEl.addEventListener("change", function () { setFieldError(lgaEl, ""); });
+
+  var ADDR = {
+    customer: ["Home address", "House number, street, area"],
+    agent: ["Location address", "Street, area, city, state"],
+    company: ["Operating address", "Office address — street, area, city"],
+  };
+
   rolesBox.addEventListener("change", function (e) {
     if (e.target.name === "role") setRole(e.target.value, { fromUser: true });
   });
@@ -351,8 +386,15 @@
     if (!phone) bad(f.phone, "Required", "Enter a phone number we can reach you on");
     else if (!Auth.validators.phone.test(phone)) bad(f.phone, "Not valid", "That phone number doesn’t look right (digits, spaces, “+” and “-” only)");
     var address = f.address.value.trim().replace(/\s+/g, " ");
-    if (!address) bad(f.address, "Required", "Enter your location address");
-    else if (address.length < 8) bad(f.address, "Too short", "Location address is too short — include street, area and city");
+    var addrName = ADDR[role][0].toLowerCase();
+    if (!address) bad(f.address, "Required", "Enter your " + addrName);
+    else if (address.length < 8) bad(f.address, "Too short", "The " + addrName + " is too short — include street, area and city");
+    if (role !== "agent") {
+      if (!stateEl.value) bad(stateEl, "Required", "Select your state");
+      else if (!LOC[stateEl.value]) bad(stateEl, "Not valid", "Choose a state from the list");
+      if (!lgaEl.value) bad(lgaEl, "Required", "Select your local government area");
+      else if (LOC[stateEl.value] && LOC[stateEl.value].indexOf(lgaEl.value) === -1) bad(lgaEl, "Not valid", "Choose a local government that belongs to " + stateEl.value);
+    }
     if (role === "company") {
       if (f.company.value.trim().length < 2) bad(f.company, "Required", "Enter your company’s registered name");
       var reg = f.reg.value.trim();
@@ -382,7 +424,7 @@
     setLoading(suBtn, true);
     try {
       var user = await Auth.provider.signUp({
-        role: role, firstName: first, lastName: last, name: first + " " + last, address: address, username: username, email: email, password: pw,
+        role: role, firstName: first, lastName: last, name: first + " " + last, address: address, state: stateEl.value, lga: lgaEl.value, username: username, email: email, password: pw,
         phone: phone, company: f.company.value, regNo: f.reg.value,
         agency: f.agency.value, licence: f.licence.value,
       });
