@@ -186,7 +186,6 @@ const CATEGORIES = [
   { id: "saved", label: "Saved", icon: "heart" },
   { id: "house", label: "Houses", icon: "house" },
   { id: "apartment", label: "Apartments", icon: "building" },
-  { id: "land", label: "Land", icon: "land" },
   { id: "rent", label: "For rent", icon: "key" },
   { id: "sale", label: "For sale", icon: "tag" },
   { id: "construction", label: "New builds", icon: "hat" },
@@ -212,7 +211,6 @@ const ICONS = {
   left: '<path d="m14 6-6 6 6 6"/>',
   right: '<path d="m10 6 6 6-6 6"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-  land: '<path d="M3 19h18"/><path d="m5 19 5-8 3.5 5 2.5-3.5L21 19"/><circle cx="17" cy="6.5" r="1.8"/>',
 };
 
 const svg = (name, cls) =>
@@ -279,41 +277,38 @@ const persistSaved = () => storage.set("lumivest:saved", [...saved]);
 const PENDING_KEY = "lumivest:pending"; // unpublished working copy (this browser only)
 const LEGACY_KEY = "lumivest:listings"; // older builds saved edits straight here
 /* Set this to the deployed worker URL. The worker keeps the GitHub token server-side. */
-const ADMIN_API = "https://lumi-vest-admin.lumi-vest.workers.dev";
+const ADMIN_API = "https://lumi-vest-publishing-api.lumi-vest.workers.dev";
 const CREDS_KEY = "lumivest:creds";
+
+/* --- who is signed in (auth.html → auth-core.js) --- */
+const authMe = () => (window.LumiAuth && window.LumiAuth.getSession()) || null;
+const myRole = () => (authMe() ? authMe().role : "customer");
+const isPartner = () => myRole() === "agent" || myRole() === "company"; // may list properties
+/* Legacy listings (no ownerId) belong to the LUMI-VEST house account. */
+const HOUSE = "house";
+const ownerKey = () => {
+  const m = authMe();
+  if (!m) return "anon";
+  return String(m.email || "").toLowerCase() === ADMIN_EMAIL ? HOUSE : m.uid;
+};
+const ownerOf = (p) => (p && p.ownerId) || HOUSE;
+
 const adminCreds = () => {
   try {
-    return JSON.parse(sessionStorage.getItem(CREDS_KEY)) || null;
+    const c = JSON.parse(sessionStorage.getItem(CREDS_KEY));
+    if (c) return c;
   } catch {
-    return null;
+    /* fall through */
   }
+  const m = authMe();
+  return m && isPartner() ? { email: m.email } : null;
 };
 
-/* GitHub rejects any single file over 100 MB, and every upload stays in the repo's
-   history forever. So the admin only ever commits small files: photos are compressed, and a
-   video bigger than maxVideoMB is cut into parts (img/listings/<name>.part001, .part002, …)
-   plus a small manifest (<name>.parts.json). Visitors' browsers stitch the parts back
-   together when they press play. */
 const PUBLISH = {
   file: "listings.json",
   mediaDir: "img/listings",
-  maxVideoMB: 20, // videos up to this size are committed as one file
-  chunkMB: 8, // bigger videos are split into parts of this size, uploaded one batch at a time
-  maxVideoTotalMB: 160, // absolute cap for one video, however many parts (keeps the repo small)
-  maxPhotoMB: 5, // compressed photos are ~0.2-0.5 MB; this is a safety net
-  maxOriginalPhotoMB: 40, // refuse to even decode absurdly large source photos
+  maxVideoMB: 25,
 };
-
-const MB = 1024 * 1024;
-const fmtMB = (bytes) => `${(bytes / MB).toFixed(1)} MB`;
-/* decoded size of a data: URL, without decoding it */
-function dataUrlBytes(src) {
-  const i = src.indexOf(",");
-  if (i < 0) return 0;
-  const pad = src.endsWith("==") ? 2 : src.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(((src.length - i - 1) * 3) / 4) - pad);
-}
-const mediaCapMB = (m) => (m.type === "video" ? PUBLISH.maxVideoMB : PUBLISH.maxPhotoMB);
 
 let publishedListings = null;
 let listingsCache = null;
@@ -323,7 +318,6 @@ let queued = false;
 let publishTimer = null;
 let lastPublishError = "";
 let warnedLocalOnly = false;
-let warnedNoBackup = false;
 
 const pubStatusEl = $("#pubStatus");
 
@@ -339,11 +333,8 @@ function getListings() {
 }
 
 /* --- media helpers --- */
-const isPartsSrc = (s = "") => /\.parts\.json(\?|#|$)/i.test(s);
-
 function kindOf(m) {
   const src = (m && m.src) || "";
-  if (isPartsSrc(src)) return "video";
   if (/^data:video\//i.test(src)) return "video";
   if (/^data:image\//i.test(src)) return "image";
   if (/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(src)) return "video";
@@ -361,14 +352,14 @@ function videoMime(src = "") {
 /* What actually gets written to listings.json: uploaded files are referenced by
    their repo path (m.pub), everything else keeps its own src. */
 function serialize(list) {
-  return list.map((p) => {
-    let media = (p.media || [])
-      .map((m) => ({ type: m.type, src: m.pub || m.src }))
-      .filter((m) => !String(m.src).startsWith("blob:")); // unpublished big-video previews
-    if (!media.length)
-      media = [{ type: "image", src: U("1523217582562-09d0def993a6") }];
-    return { ...p, media };
-  });
+  return list.map((p) => ({
+    ...p,
+    media: (p.media || []).map((m) => ({
+      type: m.type,
+      src: m.pub || m.src,
+      ...(m.fp ? { fp: m.fp } : {}),
+    })),
+  }));
 }
 
 /* --- pending (unpublished) copy --- */
@@ -386,12 +377,7 @@ function readPending() {
 
 function writePending(list) {
   hasPending = true;
-  // best effort: browsers cap localStorage at ~5 MB, so unpublished videos usually don't fit
-  const kept = storage.set(PENDING_KEY, serialize(list));
-  if (!kept && !warnedNoBackup) {
-    warnedNoBackup = true;
-    toast("Too large to keep an offline copy — keep this tab open until it says “Committed to GitHub”", "warn");
-  }
+  storage.set(PENDING_KEY, serialize(list)); // best effort (can exceed quota with big videos)
   updateAdminVisibility();
 }
 
@@ -522,8 +508,7 @@ async function ghError(res, action) {
     msg =
       "the worker or GitHub token rejected the request. Check its repository and Contents read/write permission.";
   else if (status === 409) msg = "the repository changed while publishing — try again.";
-  else if (status === 413)
-    msg = `that file is too large (videos over ${PUBLISH.maxVideoMB} MB are split automatically, up to ${PUBLISH.maxVideoTotalMB} MB in total). Use a smaller video or paste a hosted link.`;
+  else if (status === 413) msg = "that file is too large for GitHub's API.";
   else msg = detail || `GitHub returned ${status}`;
   return new GhError(`${action}: ${msg}`, status);
 }
@@ -550,21 +535,11 @@ function ghPutFile(filePath, base64, message, sha) {
   });
 }
 
-const RETRY_STATUS = new Set([409, 429, 500, 502, 503, 504]);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
 async function withRetry(fn, tries = 3) {
   for (let i = 0; ; i++) {
-    let res;
-    try {
-      res = await fn();
-    } catch (err) {
-      if (i >= tries - 1) throw err; // dropped connection etc.
-      await wait(900 * (i + 1));
-      continue;
-    }
-    if (!RETRY_STATUS.has(res.status) || i >= tries - 1) return res;
-    await wait(900 * (i + 1));
+    const res = await fn();
+    if (res.status !== 409 || i >= tries - 1) return res;
+    await new Promise((r) => setTimeout(r, 700 * (i + 1)));
   }
 }
 
@@ -613,14 +588,6 @@ async function uploadMedia(listing, media) {
   const b64 = media.src.slice(comma + 1);
   if (comma < 0 || !b64) throw new Error("One of the uploaded files could not be read");
 
-  const bytes = dataUrlBytes(media.src);
-  const capMB = mediaCapMB(media);
-  if (bytes > capMB * MB)
-    throw new GhError(
-      `“${listing.title}”: a ${media.type} is ${fmtMB(bytes)} but the limit is ${capMB} MB. Remove it and attach a smaller file or a link.`,
-      413
-    );
-
   const ext = EXT[mime] || (media.type === "video" ? "mp4" : "jpg");
   const name = `${slug(listing.id)}-${hashStr(b64)}${b64.length.toString(36)}.${ext}`;
   const filePath = `${PUBLISH.mediaDir}/${name}`;
@@ -637,79 +604,6 @@ async function uploadMedia(listing, media) {
     throw await ghError(res, `Uploading ${media.type}`);
   }
   media.pub = filePath;
-}
-
-/* A video over maxVideoMB: cut it into parts, commit them one at a time (resumable within
-   this session), then commit a manifest listing the parts. Only the manifest path goes into
-   listings.json, and only after every part is safely in the repo. */
-const partName = (i) => `.part${String(i + 1).padStart(3, "0")}`;
-const videoMimeOf = (file) =>
-  file.type && file.type.startsWith("video/")
-    ? file.type
-    : /\.webm$/i.test(file.name)
-    ? "video/webm"
-    : /\.mov$/i.test(file.name)
-    ? "video/quicktime"
-    : "video/mp4";
-
-async function uploadChunkedVideo(listing, media, label) {
-  const file = media.file;
-  if (!file)
-    throw new GhError(
-      `“${listing.title}”: a large video is no longer in memory (the page was reloaded). Remove it and attach it again.`,
-      400
-    );
-  if (file.size > PUBLISH.maxVideoTotalMB * MB)
-    throw new GhError(
-      `“${listing.title}”: that video is ${fmtMB(file.size)}; the limit is ${PUBLISH.maxVideoTotalMB} MB.`,
-      413
-    );
-
-  const size = PUBLISH.chunkMB * MB;
-  const total = Math.ceil(file.size / size);
-  const base = `${PUBLISH.mediaDir}/${slug(listing.id)}-${hashStr(
-    `${file.name}|${file.size}|${file.lastModified}`
-  )}${file.size.toString(36)}`;
-  media.partsDone = media.partsDone || [];
-  const parts = [];
-
-  for (let i = 0; i < total; i++) {
-    const path = base + partName(i);
-    parts.push(path);
-    if (media.partsDone.includes(path)) continue; // uploaded on an earlier attempt
-
-    setPubStatus("busy", `${label} · part ${i + 1} of ${total}…`);
-    const dataUrl = await fileToDataUrl(file.slice(i * size, Math.min(file.size, (i + 1) * size)));
-    const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-    const res = await withRetry(
-      () => ghPutFile(path, b64, `Add video part ${i + 1}/${total} for “${listing.title}”`),
-      4
-    );
-    if (res.status === 422) {
-      const d = await res.json().catch(() => ({}));
-      if (!/sha/i.test(d.message || "")) // "sha" = this exact part is already committed
-        throw new GhError(`Uploading video part ${i + 1}: ${d.message || "GitHub refused the file"}`, 422);
-    } else if (!res.ok) {
-      throw await ghError(res, `Uploading video part ${i + 1} of ${total}`);
-    }
-    media.partsDone.push(path);
-    if (i < total - 1) await wait(1000); // GitHub asks for ~1s between content writes
-  }
-
-  setPubStatus("busy", `${label} · finishing…`);
-  const manifestPath = base + ".parts.json";
-  const manifest = JSON.stringify({ mime: videoMimeOf(file), bytes: file.size, parts });
-  const mres = await withRetry(() =>
-    ghPutFile(manifestPath, b64FromString(manifest), `Add video manifest for “${listing.title}”`)
-  );
-  if (mres.status === 422) {
-    const d = await mres.json().catch(() => ({}));
-    if (!/sha/i.test(d.message || ""))
-      throw new GhError(`Uploading video: ${d.message || "GitHub refused the manifest"}`, 422);
-  } else if (!mres.ok) {
-    throw await ghError(mres, "Uploading video");
-  }
-  media.pub = manifestPath;
 }
 
 /* --- status chip in the admin header --- */
@@ -774,23 +668,24 @@ async function publishNow(manual = false) {
     const todo = [];
     list.forEach((p) =>
       (p.media || []).forEach((m) => {
-        if (!m.pub && ((m.src && m.src.startsWith("data:")) || m.file)) todo.push([p, m]);
+        if (m.src && m.src.startsWith("data:") && !m.pub) todo.push([p, m]);
       })
     );
     let n = 0;
     for (const [p, m] of todo) {
       n++;
-      const label = `Uploading ${m.type === "video" ? "video" : "photo"} ${n} of ${todo.length}`;
-      setPubStatus("busy", `${label}…`);
-      if (m.file) await uploadChunkedVideo(p, m, label);
-      else await uploadMedia(p, m);
+      setPubStatus(
+        "busy",
+        `Uploading ${m.type === "video" ? "video" : "photo"} ${n} of ${todo.length}…`
+      );
+      await uploadMedia(p, m);
     }
 
     // 2) commit listings.json
     setPubStatus("busy", "Publishing listings…");
     const out = serialize(list);
-    if (out.some((p) => p.media.some((m) => /^(data|blob):/.test(String(m.src)))))
-      throw new Error("A photo or video is still local — please try again");
+    if (out.some((p) => p.media.some((m) => String(m.src).startsWith("data:"))))
+      throw new Error("A photo is still embedded — please try again");
     const text = JSON.stringify(out, null, 2) + "\n";
     const count = out.filter((p) => !p.draft).length;
 
@@ -812,7 +707,11 @@ async function publishNow(manual = false) {
     lastPublishError = err.message || "Unknown error";
     setPubStatus("error", "Publish failed — click to retry");
     toast(lastPublishError, "error");
-    if (err.status === 401) {
+    if (err.status === 401 && isPartner()) {
+      lastPublishError = "";
+      setPubStatus("warn", "Saved — awaiting LUMI-VEST approval to go live");
+      toast("Your listing is saved. The LUMI-VEST team approves new listings before they go live.", "warn");
+    } else if (err.status === 401) {
       try { sessionStorage.removeItem(CREDS_KEY); } catch {}
       setAdminSignedIn(false);
       if (adminPanel.classList.contains("is-open")) renderGate();
@@ -823,14 +722,6 @@ async function publishNow(manual = false) {
     if (queued) schedulePublish();
   }
 }
-
-/* Don't let the admin close the tab while edits/uploads are still being committed */
-window.addEventListener("beforeunload", (e) => {
-  if (publishing || (hasPending && ghReady())) {
-    e.preventDefault();
-    e.returnValue = "";
-  }
-});
 
 /* ---------------- Toasts ---------------- */
 
@@ -889,7 +780,7 @@ function matches(p) {
 
   if (activeCat === "saved") {
     if (!saved.has(p.id)) return false;
-  } else if (activeCat === "house" || activeCat === "apartment" || activeCat === "land") {
+  } else if (activeCat === "house" || activeCat === "apartment") {
     if (p.type !== activeCat) return false;
   } else if (activeCat === "rent" && p.mode !== "rent") return false;
   else if (activeCat === "sale" && p.mode !== "sale") return false;
@@ -927,26 +818,10 @@ function priceHTML(p) {
   }`;
 }
 
-/* a video stored as parts: nothing is downloaded until the visitor presses play */
-function partsPlaceholder(m) {
-  return `<button type="button" class="video-parts" data-manifest="${esc(m.src)}" aria-label="Play video"><span class="vp-icon">▶</span><span class="vp-label">Play video</span></button>`;
-}
-
 function slideHTML(m, p) {
-  if (m.type === "video" && isPartsSrc(m.src))
-    return `<div class="card-slide">${partsPlaceholder(m)}</div>`;
   if (m.type === "video")
     return `<div class="card-slide"><video muted loop playsinline preload="metadata"><source src="${esc(m.src)}" type="${videoMime(m.src)}"></video></div>`;
   return `<div class="card-slide"><img src="${esc(m.src)}" alt="${esc(p.title)}" loading="lazy"></div>`;
-}
-
-const plural = (n, word) => `${n} ${word}${Number(n) === 1 ? "" : "s"}`;
-const hasSize = (p) => p.size && p.size !== "—";
-const TYPE_LABEL = { house: "House / bungalow", apartment: "Apartment", land: "Land / plot" };
-
-function detailsLine(p) {
-  if (p.type === "land") return hasSize(p) ? `Land · ${esc(p.size)}` : "Land / plot";
-  return `${plural(p.beds, "bed")} · ${plural(p.baths, "bath")} · ${esc(p.size)}`;
 }
 
 function cardHTML(p, i) {
@@ -983,7 +858,9 @@ function cardHTML(p, i) {
       <span class="card-rating">${rating}</span>
     </div>
     <p class="card-location">${esc(p.location)}</p>
-    <p class="card-details">${detailsLine(p)}</p>
+    <p class="card-details">${p.beds} bed${p.beds > 1 ? "s" : ""} · ${
+      p.baths
+    } bath${p.baths > 1 ? "s" : ""} · ${esc(p.size)}</p>
     <p class="card-price">${priceHTML(p)}</p>
   </article>`;
 }
@@ -1164,9 +1041,10 @@ menuDrop.addEventListener("click", (e) => {
   if (link.dataset.menu === "admin") {
     e.preventDefault();
     openAdmin();
-  } else if (link.dataset.menu === "theme") {
+  } else if (link.dataset.menu === "signout") {
     e.preventDefault();
-    toggleTheme();
+    window.LumiAuth.signOut();
+    return;
   } else if (link.dataset.menu === "saved") {
     e.preventDefault();
     activeCat = "saved";
@@ -1178,6 +1056,25 @@ menuDrop.addEventListener("click", (e) => {
   menuBtn.setAttribute("aria-expanded", "false");
 });
 
+/* Signed-in user: initials on the avatar + name/email at the top of the menu */
+(function showSignedInUser() {
+  const me = window.LumiAuth && window.LumiAuth.getSession();
+  if (!me) return;
+  const label = me.name || me.username || me.email || "";
+  const initials =
+    label.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "U";
+  const dot = $(".avatar-dot");
+  if (dot) dot.textContent = initials;
+  const box = $("#menuUser");
+  if (box) {
+    $("#menuUserName").textContent = label;
+    $("#menuUserEmail").textContent = me.email || "";
+    const roleName = { customer: "Customer", agent: "Agent", company: "Company" }[me.role] || "Customer";
+    $("#menuUserRole").textContent = me.company ? `${roleName} · ${me.company}` : roleName;
+    box.hidden = false;
+  }
+})();
+
 /* ---------------- Listing modal ---------------- */
 
 const modal = $("#listingModal");
@@ -1187,7 +1084,6 @@ let currentProperty = null;
 let currentSlide = 0;
 
 function mediaEl(m, p, cls) {
-  if (m.type === "video" && isPartsSrc(m.src)) return partsPlaceholder(m);
   if (m.type === "video")
     return `<video ${cls} muted loop playsinline preload="metadata" data-kind="video"><source src="${esc(m.src)}" type="${videoMime(m.src)}"></video>`;
   return `<img ${cls} src="${esc(m.src)}" alt="${esc(p.title)}">`;
@@ -1231,14 +1127,12 @@ function modalHTML(p) {
         </div>
       </div>
 
-      <div class="mb-facts">${
-        p.type === "land"
-          ? `<div class="fact"><strong>${esc(p.size || "—")}</strong><span>Land size</span></div>`
-          : `<div class="fact"><strong>${p.beds}</strong><span>${Number(p.beds) === 1 ? "Bedroom" : "Bedrooms"}</span></div>
-        <div class="fact"><strong>${p.baths}</strong><span>${Number(p.baths) === 1 ? "Bathroom" : "Bathrooms"}</span></div>
+      <div class="mb-facts">
+        <div class="fact"><strong>${p.beds}</strong><span>Bedroom${p.beds > 1 ? "s" : ""}</span></div>
+        <div class="fact"><strong>${p.baths}</strong><span>Bathroom${p.baths > 1 ? "s" : ""}</span></div>
         <div class="fact"><strong>${esc(String(p.parking || "—").replace(" cars", "").replace(" car", ""))}</strong><span>Parking</span></div>
-        <div class="fact"><strong>${esc(p.size)}</strong><span>Land size</span></div>`
-      }</div>
+        <div class="fact"><strong>${esc(p.size)}</strong><span>Land size</span></div>
+      </div>
 
       <p class="mb-desc">${esc(p.desc)}</p>
 
@@ -1269,7 +1163,7 @@ function modalHTML(p) {
         <div class="booking-rows">
           <div class="booking-row"><span>Status</span><strong>${esc(p.status)}</strong></div>
           <div class="booking-row"><span>Property type</span><strong>${
-            TYPE_LABEL[p.type] || "Apartment"
+            p.type === "house" ? "House / bungalow" : "Apartment"
           }</strong></div>
           <div class="booking-row"><span>Location</span><strong>${esc(p.location)}</strong></div>
         </div>
@@ -1322,63 +1216,6 @@ function closeModal() {
   currentProperty = null;
   if (lastFocused && lastFocused.focus) lastFocused.focus();
 }
-
-/* download the parts, join them in memory and play the result */
-const partsCache = new Map();
-
-async function loadPartsVideo(btn) {
-  if (btn.dataset.loading) return;
-  btn.dataset.loading = "1";
-  const label = $(".vp-label", btn);
-  const manifestPath = btn.dataset.manifest;
-  try {
-    let url = partsCache.get(manifestPath);
-    if (!url) {
-      label.textContent = "Loading video…";
-      const mres = await fetch(manifestPath);
-      if (!mres.ok) throw new Error("manifest");
-      const man = await mres.json();
-      const parts = Array.isArray(man.parts) ? man.parts : [];
-      if (!parts.length || !parts.every((x) => /^img\/listings\/[A-Za-z0-9._-]+$/.test(x)))
-        throw new Error("bad manifest");
-      const blobs = new Array(parts.length);
-      let next = 0;
-      let done = 0;
-      const lane = async () => {
-        while (next < parts.length) {
-          const i = next++;
-          const r = await fetch(parts[i]);
-          if (!r.ok) throw new Error(`part ${i + 1}`);
-          blobs[i] = await r.blob();
-          label.textContent = `Loading video… ${Math.round((++done / parts.length) * 100)}%`;
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(3, parts.length) }, lane));
-      url = URL.createObjectURL(new Blob(blobs, { type: man.mime || "video/mp4" }));
-      partsCache.set(manifestPath, url);
-    }
-    const v = document.createElement("video");
-    v.src = url;
-    v.controls = true;
-    v.muted = true;
-    v.loop = true;
-    v.playsInline = true;
-    btn.replaceWith(v);
-    v.play().catch(() => {});
-  } catch {
-    delete btn.dataset.loading;
-    label.textContent = "Couldn’t load the video — tap to retry";
-  }
-}
-
-// only inside the listing modal; on a card a tap just opens the listing
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest(".video-parts");
-  if (btn && btn.closest("#listingModal")) {
-    e.preventDefault();
-    loadPartsVideo(btn);
-  }
-});
 
 function setModalSlide(idx) {
   const p = currentProperty;
@@ -1563,6 +1400,7 @@ const adminBody = $("#adminBody");
 let adminLastFocus = null;
 
 function adminSignedIn() {
+  if (isPartner()) return true; // agents & companies manage their own listings
   try {
     if (!adminCreds()) return false;
     return sessionStorage.getItem("lumivest:admin") === "1";
@@ -1586,9 +1424,14 @@ function setAdminSignedIn(v) {
 }
 
 /* The menu entry is public; the publishing worker protects admin operations. */
+function canManageListings() {
+  const m = authMe();
+  return isPartner() || (m && String(m.email || "").toLowerCase() === ADMIN_EMAIL);
+}
+
 function updateAdminVisibility() {
   const wrap = $("#menuAdminWrap");
-  if (wrap) wrap.hidden = false;
+  if (wrap) wrap.hidden = !canManageListings();
 }
 
 function checkAdminHash() {
@@ -1598,6 +1441,10 @@ function checkAdminHash() {
 }
 
 function openAdmin() {
+  if (!canManageListings()) {
+    toast("Managing listings is for agent and company accounts", "error");
+    return;
+  }
   adminLastFocus = document.activeElement;
   adminPanel.classList.add("is-open");
   adminPanel.setAttribute("aria-hidden", "false");
@@ -1688,19 +1535,24 @@ function refreshGhCard() {
 }
 
 /* --- dashboard --- */
+const canEditListing = (p) => ownerKey() === HOUSE || ownerOf(p) === ownerKey();
+
 function renderAdminList() {
   adminBody.onclick = null;
-  const list = getListings();
+  const full = getListings();
+  const house = ownerKey() === HOUSE;
+  const list = house ? full : full.filter((p) => ownerOf(p) === ownerKey());
+  const flagCount = house ? readFlags().length : 0;
 
   adminBody.innerHTML = `
     ${ghCardHTML()}
     <div class="admin-toolbar">
       <button class="btn btn-gradient btn-sm" id="adminAdd">+ Add listing</button>
       <div class="admin-tools">
-        <button class="btn btn-ghost btn-sm" id="adminExport">Backup</button>
-        <button class="btn btn-ghost btn-sm" id="adminImport">Import</button>
+        ${house ? '<button class="btn btn-ghost btn-sm" id="adminExport">Backup</button><button class="btn btn-ghost btn-sm" id="adminImport">Import</button>' : ""}
+        ${flagCount ? `<button class="btn btn-ghost btn-sm" id="adminFlags">Flags (${flagCount})</button>` : ""}
         ${hasPending ? '<button class="btn btn-ghost btn-sm" id="adminDiscard">Discard unpublished</button>' : ""}
-        <button class="btn btn-ghost btn-sm" id="adminLogout">Sign out</button>
+        ${isPartner() ? "" : '<button class="btn btn-ghost btn-sm" id="adminLogout">Sign out</button>'}
       </div>
     </div>
     <div class="admin-import" id="adminImportBox" hidden>
@@ -1717,11 +1569,12 @@ function renderAdminList() {
             <strong>${esc(p.title)}</strong>
             ${p.draft ? '<span class="pill pill-draft">Draft</span>' : ""}
             <span class="pill">${esc(p.status)}</span>
+            ${house && p.ownerId ? `<span class="pill">${esc(p.ownerRole || "partner")}: ${esc(p.ownerName || "account")}</span>` : ""}
             <small>${esc(p.location)} · ${naira(p.price)}</small>
           </div>
           <div class="admin-row-actions">
-            <button data-act="up" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
-            <button data-act="down" ${i === list.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
+            ${house ? `<button data-act="up" ${i === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
+            <button data-act="down" ${i === list.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>` : ""}
             <button data-act="edit">Edit</button>
             <button data-act="dup">Duplicate</button>
             <button data-act="draft">${p.draft ? "Publish" : "Draft"}</button>
@@ -1734,15 +1587,22 @@ function renderAdminList() {
     </div>`;
 
   $("#adminAdd").addEventListener("click", () => renderForm(null));
-  $("#adminExport").addEventListener("click", () =>
-    downloadJSON("lumivest-listings.json", serialize(getListings()))
-  );
-  $("#adminImport").addEventListener("click", () => {
+  if (house) {
+    $("#adminExport").addEventListener("click", () =>
+      downloadJSON("lumivest-listings.json", serialize(getListings()))
+    );
+    $("#adminImport").addEventListener("click", () => {
+      const box = $("#adminImportBox");
+      box.hidden = !box.hidden;
+      if (!box.hidden) $("#adminImportText").focus();
+    });
+    $("#adminImportApply").addEventListener("click", importListings);
+  } else {
     const box = $("#adminImportBox");
-    box.hidden = !box.hidden;
-    if (!box.hidden) $("#adminImportText").focus();
-  });
-  $("#adminImportApply").addEventListener("click", importListings);
+    if (box) box.remove();
+  }
+  const flagsBtn = $("#adminFlags");
+  if (flagsBtn) flagsBtn.addEventListener("click", renderFlags);
   const discard = $("#adminDiscard");
   if (discard)
     discard.addEventListener("click", async () => {
@@ -1751,11 +1611,13 @@ function renderAdminList() {
       renderAdminList();
       toast("Unpublished changes discarded");
     });
-  $("#adminLogout").addEventListener("click", () => {
-    setAdminSignedIn(false);
-    renderGate();
-    toast("Signed out");
-  });
+  const logout = $("#adminLogout");
+  if (logout)
+    logout.addEventListener("click", () => {
+      setAdminSignedIn(false);
+      renderGate();
+      toast("Signed out");
+    });
 
   adminBody.onclick = (e) => {
     const g = e.target.closest("[data-gh]");
@@ -1770,6 +1632,10 @@ function renderAdminList() {
     const current = getListings();
     const idx = current.findIndex((x) => x.id === row.dataset.id);
     if (idx < 0) return;
+    if (!canEditListing(current[idx])) {
+      toast("You can only change listings that belong to your account", "error");
+      return;
+    }
     const act = btn.dataset.act;
 
     if (act === "edit") return renderForm(current[idx]);
@@ -1815,8 +1681,6 @@ function fileToDataUrl(file) {
 
 // Shrinks phone photos (often 4–8 MB) to ~150–300 KB before they go to GitHub
 async function compressImage(file, maxSide = 1600, quality = 0.82) {
-  if (file.size > PUBLISH.maxOriginalPhotoMB * MB)
-    throw new Error(`that photo is ${fmtMB(file.size)} — please use one under ${PUBLISH.maxOriginalPhotoMB} MB`);
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((resolve, reject) => {
@@ -1835,26 +1699,255 @@ async function compressImage(file, maxSide = 1600, quality = 0.82) {
     ctx.fillStyle = "#fff"; // flatten transparency for JPEG
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
-    const out = canvas.toDataURL("image/jpeg", quality);
-    if (dataUrlBytes(out) > PUBLISH.maxPhotoMB * MB)
-      throw new Error("that photo is still too large after compressing");
-    return out;
+    return canvas.toDataURL("image/jpeg", quality);
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
 function sizeLabel(dataUri) {
-  const bytes = dataUrlBytes(dataUri);
-  return bytes > MB ? fmtMB(bytes) : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  const bytes = (dataUri.length * 3) / 4;
+  return bytes > 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/* ============ Asset integrity — duplicate media guard ============
+   Every photo / video gets a fingerprint when it is attached:
+     sha  – SHA-256 of the original file bytes   → "identical file"
+     dh   – 64-bit difference hash (images only) → "near-identical image"
+            (survives resizing, recompression, mild edits)
+     u    – normalised link (URL media)          → "same link"
+   Fingerprints are stored with the listing (listings.json), so a submission is
+   compared against every other account's listings. The check runs silently while
+   the owner works; only a conflict is ever shown, and it rejects the listing. */
+
+const FLAGS_KEY = "lumivest:asset-flags";
+const PLACEHOLDER_URL = U("1523217582562-09d0def993a6");
+const DHASH_MAX_DISTANCE = 5; // of 64 bits
+const fpPending = new WeakMap();
+
+const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+const URL_NOISE = new Set(["w", "h", "q", "fit", "auto", "crop", "format", "fm", "width", "height", "quality", "ixlib", "ixid", "dpr", "cs"]);
+function normUrl(src) {
+  try {
+    const u = new URL(src, location.href);
+    if (!/^https?:$/.test(u.protocol)) return "";
+    [...u.searchParams.keys()].forEach((k) => {
+      if (URL_NOISE.has(k) || /^utm_/.test(k)) u.searchParams.delete(k);
+    });
+    u.searchParams.sort();
+    return (u.host.toLowerCase() + u.pathname + u.search).replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+const sameOrigin = (src) => {
+  try {
+    return new URL(src, location.href).origin === location.origin;
+  } catch {
+    return false;
+  }
+};
+
+async function dHashFromBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("decode"));
+      i.src = url;
+    });
+    const c = document.createElement("canvas");
+    c.width = 9;
+    c.height = 8;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 9, 8);
+    const d = ctx.getImageData(0, 0, 9, 8).data;
+    const g = (x, y) => {
+      const i = (y * 9 + x) * 4;
+      return d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    };
+    let bits = "";
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits += g(x, y) > g(x + 1, y) ? "1" : "0";
+    const ones = bits.split("1").length - 1;
+    if (ones < 10 || ones > 54) return null; // flat / blank images carry no signal
+    let hex = "";
+    for (let i = 0; i < 64; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+    return hex;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function hamming(a, b) {
+  let n = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    let x = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    while (x) {
+      n += x & 1;
+      x >>= 1;
+    }
+  }
+  return n;
+}
+
+async function fingerprintBlob(blob, kind) {
+  const fp = { k: kind };
+  try {
+    fp.sha = toHex(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()));
+  } catch {
+    /* insecure context — fall back to the other signals */
+  }
+  if (kind === "image") {
+    try {
+      const dh = await dHashFromBlob(blob);
+      if (dh) fp.dh = dh;
+    } catch {
+      /* undecodable image — ignore */
+    }
+  }
+  return fp;
+}
+
+/* Fingerprint (and cache) one media item. Never throws. */
+function ensureFp(m) {
+  if (m.fp) return Promise.resolve(m.fp);
+  if (fpPending.has(m)) return fpPending.get(m);
+  const job = (async () => {
+    const src = m.src || "";
+    const kind = kindOf(m);
+    const fp = { k: kind };
+    try {
+      if (src.startsWith("data:")) {
+        Object.assign(fp, await fingerprintBlob(await (await fetch(src)).blob(), kind));
+      } else {
+        const u = normUrl(src);
+        if (u && u !== normUrl(PLACEHOLDER_URL)) fp.u = u;
+        if (kind === "image" && sameOrigin(src)) {
+          const r = await fetch(src, { cache: "force-cache" });
+          if (r.ok) Object.assign(fp, await fingerprintBlob(await r.blob(), kind));
+        }
+      }
+    } catch {
+      /* keep whatever we have */
+    }
+    m.fp = fp;
+    return fp;
+  })();
+  fpPending.set(m, job);
+  return job;
+}
+
+function matchAssets(a, b) {
+  if (a.sha && b.sha && a.sha === b.sha) return "an identical file";
+  if (a.dh && b.dh && hamming(a.dh, b.dh) <= DHASH_MAX_DISTANCE) return "a near-identical image";
+  if (a.u && b.u && a.u === b.u) return "the same link";
+  return "";
+}
+
+async function runLimited(items, limit, fn) {
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (i < items.length) await fn(items[i++]);
+    })
+  );
+}
+
+/* Compare a listing against every listing owned by someone else. */
+async function findAssetConflicts(listing) {
+  const me = ownerKey();
+  const mine = await Promise.all((listing.media || []).map(ensureFp));
+  const others = getListings().filter((o) => o.id !== listing.id && ownerOf(o) !== me);
+  const missing = [];
+  others.forEach((o) => (o.media || []).forEach((m) => !m.fp && missing.push(m)));
+  await runLimited(missing, 4, ensureFp); // silent back-fill for older listings
+
+  const seen = new Set();
+  const out = [];
+  mine.forEach((a, index) => {
+    others.forEach((o) =>
+      (o.media || []).forEach((m) => {
+        if (!m.fp) return;
+        const why = matchAssets(a, m.fp);
+        const key = index + "|" + o.id;
+        if (!why || seen.has(key)) return;
+        seen.add(key);
+        out.push({
+          index,
+          kind: a.k,
+          why,
+          otherId: o.id,
+          otherTitle: o.title,
+          otherOwner: ownerOf(o),
+          otherName: o.ownerName || "LUMI-VEST",
+        });
+      })
+    );
+  });
+  return out;
+}
+
+/* --- flag log (reviewed by the admin) --- */
+const readFlags = () => {
+  const f = storage.get(FLAGS_KEY, []);
+  return Array.isArray(f) ? f : [];
+};
+
+function recordFlag(listing, conflicts) {
+  const m = authMe() || {};
+  const list = readFlags();
+  list.unshift({
+    ts: Date.now(),
+    title: listing.title,
+    by: { key: ownerKey(), name: m.name || "", email: m.email || "", role: m.role || "" },
+    conflicts,
+  });
+  storage.set(FLAGS_KEY, list.slice(0, 100));
+}
+
+function renderFlags() {
+  adminBody.onclick = null;
+  const flags = readFlags();
+  adminBody.innerHTML = `
+    <button class="admin-back-link" id="flagsBack">← All listings</button>
+    <h3 class="admin-form-title">Flagged submissions</h3>
+    ${
+      flags
+        .map(
+          (f) => `
+      <div class="flag-card">
+        <strong>${esc(f.title)}</strong>
+        <small>${new Date(f.ts).toLocaleString("en-NG")} · ${esc(f.by.role || "account")} ${esc(f.by.name)} (${esc(f.by.email)}) · rejected</small>
+        <ul>${f.conflicts
+          .map(
+            (c) =>
+              `<li>${c.kind === "video" ? "Video" : "Photo"} ${c.index + 1} is ${esc(c.why)} of one in “${esc(c.otherTitle)}” (${esc(c.otherName)})</li>`
+          )
+          .join("")}</ul>
+      </div>`
+        )
+        .join("") || '<p class="admin-empty">No flagged submissions.</p>'
+    }
+    ${flags.length ? '<button class="btn btn-ghost btn-sm" id="flagsClear">Clear log</button>' : ""}`;
+  $("#flagsBack").addEventListener("click", renderAdminList);
+  const clear = $("#flagsClear");
+  if (clear)
+    clear.addEventListener("click", () => {
+      if (!confirm("Clear the flag log?")) return;
+      storage.remove(FLAGS_KEY);
+      renderAdminList();
+    });
 }
 
 /* --- add / edit form --- */
 function renderForm(p) {
   adminBody.onclick = null;
   const isNew = !p;
-  // shallow copies: unpublished big videos keep their File while the form is open
-  const media = p ? (p.media || []).map((m) => ({ ...m })) : [];
+  const media = p ? JSON.parse(JSON.stringify(p.media || [])) : [];
   const highlights = p && Array.isArray(p.highlights) ? p.highlights.join("\n") : "";
   const statusOptions = [
     "For Sale",
@@ -1875,7 +1968,6 @@ function renderForm(p) {
         <select id="aType">
           <option value="house" ${p?.type === "house" ? "selected" : ""}>House / bungalow</option>
           <option value="apartment" ${!p || p.type === "apartment" ? "selected" : ""}>Apartment</option>
-          <option value="land" ${p?.type === "land" ? "selected" : ""}>Land / plot</option>
         </select>
       </label>
       <label>Deal
@@ -1934,20 +2026,14 @@ function renderForm(p) {
     rows.innerHTML =
       media
         .map((m, i) => {
-          const embedded = Boolean(m.file) || m.src.startsWith("data:");
+          const embedded = m.src.startsWith("data:");
           const thumb =
             m.type === "video"
               ? '<span class="media-thumb media-thumb--video" aria-hidden="true">▶</span>'
               : `<img class="media-thumb" src="${esc(m.src)}" alt="" loading="lazy">`;
           const field = embedded
-            ? `<span class="media-local">${m.type === "video" ? "Video" : "Photo"} · ${
-                m.file ? fmtMB(m.file.size) : sizeLabel(m.src)
-              } · ${
-                m.pub
-                  ? "saved to your repository"
-                  : m.file
-                  ? `uploads in ${Math.ceil(m.file.size / (PUBLISH.chunkMB * MB))} parts when published`
-                  : "uploads to GitHub when published"
+            ? `<span class="media-local">${m.type === "video" ? "Video" : "Photo"} · ${sizeLabel(m.src)} · ${
+                m.pub ? "saved to your repository" : "uploads to GitHub when published"
               }</span>`
             : `<input data-src value="${esc(m.src)}">`;
           return `
@@ -1970,6 +2056,8 @@ function renderForm(p) {
     const m = media[Number(inp.closest(".media-row").dataset.i)];
     m.src = inp.value.trim();
     delete m.pub;
+    delete m.fp; // link changed → fingerprint it again
+    fpPending.delete(m);
   });
 
   rows.addEventListener("change", (e) => {
@@ -2014,7 +2102,10 @@ function renderForm(p) {
     let added = 0;
     for (const file of files) {
       try {
-        media.push({ type: "image", src: await compressImage(file) });
+        const m = { type: "image", src: await compressImage(file) };
+        media.push(m);
+        // silent: fingerprint the ORIGINAL file in the background (save waits for it)
+        fpPending.set(m, fingerprintBlob(file, "image").then((fp) => (m.fp = fp)));
         added++;
       } catch (err) {
         toast(`${file.name}: ${err.message}`, "error");
@@ -2030,32 +2121,17 @@ function renderForm(p) {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
     if (!file) return;
-    if (!/^video\//i.test(file.type) && !/\.(mp4|webm|mov|m4v)$/i.test(file.name)) {
-      toast("That doesn’t look like a video file (use MP4, WebM or MOV)", "error");
-      return;
-    }
-    if (file.size > PUBLISH.maxVideoTotalMB * MB) {
+    if (file.size > PUBLISH.maxVideoMB * 1024 * 1024) {
       toast(
-        `That video is ${fmtMB(file.size)}. The limit is ${PUBLISH.maxVideoTotalMB} MB. Compress it, or host it elsewhere and use “+ Video URL”.`,
+        `That video is over ${PUBLISH.maxVideoMB} MB — compress it first, or paste a link instead`,
         "error"
       );
       return;
     }
-    if (file.size > PUBLISH.maxVideoMB * MB) {
-      // too big for one GitHub file: keep the File and upload it in parts at publish time
-      media.push({ type: "video", src: URL.createObjectURL(file), file });
-      paintMedia();
-      toast(
-        `Large video attached (${fmtMB(file.size)}) — it uploads in ${Math.ceil(
-          file.size / (PUBLISH.chunkMB * MB)
-        )} parts. Keep this tab open until publishing finishes.`
-      );
-      return;
-    }
     try {
-      const src = await fileToDataUrl(file);
-      if (dataUrlBytes(src) > PUBLISH.maxVideoMB * MB) throw new Error("That video is too large");
-      media.push({ type: "video", src });
+      const m = { type: "video", src: await fileToDataUrl(file) };
+      media.push(m);
+      fpPending.set(m, fingerprintBlob(file, "video").then((fp) => (m.fp = fp)));
       paintMedia();
       toast("Video attached");
     } catch (err) {
@@ -2063,11 +2139,35 @@ function renderForm(p) {
     }
   });
 
-  $("#aSave").addEventListener("click", () => {
+  const showFormAlert = (title, reasons) => {
+    const old = $("#formAlert");
+    if (old) old.remove();
+    const box = document.createElement("div");
+    box.id = "formAlert";
+    box.className = "form-alert";
+    box.setAttribute("role", "alert");
+    box.tabIndex = -1;
+    const h = document.createElement("strong");
+    h.textContent = title;
+    const ul = document.createElement("ul");
+    reasons.forEach((r) => {
+      const li = document.createElement("li");
+      li.textContent = r;
+      ul.appendChild(li);
+    });
+    box.append(h, ul);
+    $("#formBack").after(box);
+    box.focus({ preventScroll: true });
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+
+  $("#aSave").addEventListener("click", async () => {
+    const saveBtn = $("#aSave");
+    if (saveBtn.dataset.busy) return;
     const title = $("#aTitle").value.trim();
     const location = $("#aLocation").value.trim();
     const price = Number($("#aPrice").value);
-    if (!title || !location || !(price > 0)) {
+    if (!title || !location || !price) {
       toast("Title, location and price are required", "error");
       return;
     }
@@ -2083,10 +2183,10 @@ function renderForm(p) {
       status: $("#aStatus").value,
       badge: $("#aBadge").value.trim() || "New",
       alert: $("#aAlert").checked,
-      rating: ratingRaw === "" ? null : Math.min(5, Math.max(0, Number(ratingRaw) || 0)),
-      reviews: Math.max(0, Number($("#aReviews").value) || 0),
-      beds: Math.max(0, Number($("#aBeds").value) || 0),
-      baths: Math.max(0, Number($("#aBaths").value) || 0),
+      rating: ratingRaw === "" ? null : Number(ratingRaw),
+      reviews: Number($("#aReviews").value) || 0,
+      beds: Number($("#aBeds").value) || 0,
+      baths: Number($("#aBaths").value) || 0,
       parking: $("#aParking").value.trim() || "—",
       size: $("#aSize").value.trim() || "—",
       desc: $("#aDesc").value.trim(),
@@ -2105,6 +2205,43 @@ function renderForm(p) {
     listing.media.forEach((m) => {
       m.type = kindOf(m);
     });
+
+    // ownership (used for permissions and for the duplicate-media check)
+    const me = authMe() || {};
+    if (p && p.ownerId) {
+      listing.ownerId = p.ownerId;
+      if (p.ownerName) listing.ownerName = p.ownerName;
+      if (p.ownerRole) listing.ownerRole = p.ownerRole;
+    } else if (!p) {
+      listing.ownerId = ownerKey();
+      listing.ownerName = me.company || me.name || "LUMI-VEST";
+      listing.ownerRole = ownerKey() === HOUSE ? "house" : me.role || "agent";
+    }
+
+    // silent duplicate-media guard: invisible unless it finds a conflict
+    saveBtn.dataset.busy = "1";
+    try {
+      const conflicts = await findAssetConflicts(listing);
+      if (conflicts.length) {
+        recordFlag(listing, conflicts);
+        showFormAlert(
+          "Listing rejected — these photos or videos are already used by another account",
+          conflicts.map(
+            (c) =>
+              `${c.kind === "video" ? "Video" : "Photo"} ${c.index + 1} is ${c.why} of media in a listing submitted by someone else`
+          ).concat([
+            "Only upload media you own. Remove the flagged items and submit again.",
+            "If you believe this is a mistake, contact the LUMI-VEST team.",
+          ])
+        );
+        toast("Listing rejected — duplicate media detected", "error");
+        return;
+      }
+    } catch {
+      /* a failed check must never block an honest submission */
+    } finally {
+      delete saveBtn.dataset.busy;
+    }
 
     const current = getListings();
     const idx = p ? current.findIndex((x) => x.id === p.id) : -1;
@@ -2168,19 +2305,7 @@ function importListings() {
 const THEME_KEY = "lumivest:theme";
 
 function applyTheme(theme) {
-  const light = theme === "light";
-  document.documentElement.classList.toggle("light", light);
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = light ? "#faf7f0" : "#0a0907";
-  const label = document.getElementById("themeLabelMenu");
-  if (label) label.textContent = light ? "Light" : "Dark";
-}
-
-function toggleTheme() {
-  const next = document.documentElement.classList.contains("light") ? "dark" : "light";
-  applyTheme(next);
-  storage.set(THEME_KEY, next);
-  toast(next === "light" ? "Light mode on ☀️" : "Dark mode on 🌙");
+  document.documentElement.classList.toggle("light", theme === "light");
 }
 
 // initialise: saved preference, else system preference
@@ -2190,7 +2315,13 @@ const initialTheme =
 applyTheme(initialTheme);
 
 const themeToggle = $("#themeToggle");
-if (themeToggle) themeToggle.addEventListener("click", toggleTheme);
+if (themeToggle)
+  themeToggle.addEventListener("click", () => {
+    const next = document.documentElement.classList.contains("light") ? "dark" : "light";
+    applyTheme(next);
+    storage.set(THEME_KEY, next);
+    toast(next === "light" ? "Light mode on ☀️" : "Dark mode on 🌙");
+  });
 
 
 /* ---------------- Init ---------------- */

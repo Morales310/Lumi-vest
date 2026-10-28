@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0a0907" />
+  <meta name="robots" content="noindex" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; base-uri 'none'; form-action 'self'; object-src 'none'" />
+  <title>Sign in · LUMI-VEST</title>
+  <meta name="description" content="Sign in or create your LUMI-VEST account to browse verified homes in Kaduna." />
+  <link rel="icon" href="img/IMG-20260425-WA0004.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="auth.css?v=1" />
+  <script src="auth-core.js?v=1"></script>
+</head>
+<body class="auth-body">
+
+  <!-- Blurred brand backdrop + neon ray tracing the logo -->
+  <div class="auth-art" aria-hidden="true">
+    <div class="art-stage">
+      <img class="art-img" src="img/IMG-20260425-WA0004.jpg" alt="" width="1024" height="1024" decoding="async" fetchpriority="high" />
+      <svg class="art-ray" id="artRay" viewBox="0 0 1024 1024" preserveAspectRatio="xMidYMid meet" focusable="false">
+        <defs>
+          <linearGradient id="rayGrad" gradientUnits="userSpaceOnUse" x1="170" y1="0" x2="835" y2="0">
+            <stop offset="0" stop-color="#B9FFFF"/>
+            <stop offset=".35" stop-color="#39C9F5"/>
+            <stop offset=".7" stop-color="#A589FF"/>
+            <stop offset="1" stop-color="#C59AF5"/>
+          </linearGradient>
+        </defs>
+        <g class="ray-glow" fill="none" stroke="url(#rayGrad)" stroke-linejoin="round" stroke-linecap="round">
+<g data-trace="swoosh"><path d="M764 449 L756 436 L737 420 L712 408 L691 402 L713 412 L727 424 L730 431 L730 440 L724 452 L706 469 L676 486 L641 500 L593 514 L514 529 L486 529 L468 534 L422 538 L348 538 L301 534 L271 529 L316 540 L348 544 L348 548 L304 544 L278 539 L246 530 L221 519 L238 532 L264 544 L286 551 L319 558 L353 562 L398 564 L401 566 L431 566 L435 568 L447 568 L449 570 L453 568 L457 570 L459 568 L483 567 L493 564 L503 564 L505 567 L514 566 L515 564 L526 565 L575 557 L625 545 L656 535 L693 520 L724 503 L739 492 L752 479 L759 469 L764 457Z"/></g>
+<g data-trace="house"><path d="M598 438 L462 321 L450 313 L447 314 L419 340 L376 376 L372 375 L371 366 L349 366 L348 399 L292 441 L329 441 L331 499 L334 500 L339 498 L351 498 L353 421 L392 391 L448 343 L455 345 L548 420 L549 423 L554 427 L553 430 L548 429 L549 458 L562 456 L566 457 L567 441 L569 439Z"/><path d="M427 406 L428 427 L448 427 L450 420 L453 421 L453 427 L474 426 L473 405 L453 405 L452 407 L448 405Z"/><path d="M428 432 L429 450 L434 449 L446 451 L448 432Z"/><path d="M453 433 L455 451 L472 448 L474 435 L473 432Z"/></g>
+<g data-trace="towers"><path d="M570 230 L515 281 L516 351 L567 376 L569 373Z"/><path d="M584 173 L581 183 L581 191 L583 195 L585 381 L599 381 L602 293 L605 291 L614 291 L616 301 L618 418 L643 419 L662 426 L668 426 L670 373 L673 369 L673 362 L669 350 L669 316 L648 300 L643 294 L642 268 L644 233Z"/></g>
+<g data-trace="text"><path d="M175 608 L175 721 L247 721 L246 712 L197 712 L195 710 L195 608Z"/><path d="M256 647 L256 701 L259 711 L266 719 L275 723 L291 723 L313 712 L315 721 L331 720 L332 655 L330 646 L314 646 L312 648 L313 700 L305 708 L295 712 L288 712 L281 709 L277 705 L275 700 L275 647Z"/><path d="M350 647 L351 721 L368 721 L369 666 L375 661 L382 658 L392 658 L396 660 L402 668 L403 721 L420 721 L421 666 L433 658 L447 659 L453 666 L455 721 L472 721 L472 662 L467 652 L462 648 L454 645 L442 645 L431 649 L422 656 L418 656 L413 650 L402 645 L386 646 L371 655 L368 654 L368 646Z"/><path d="M498 609 L490 615 L489 623 L494 630 L503 632 L511 627 L513 618 L508 611 L504 609Z"/><path d="M492 647 L492 720 L509 721 L510 647Z"/><path d="M526 647 L561 719 L563 721 L574 721 L607 647 L596 648 L574 700 L570 698 L547 647Z"/><path d="M628 652 L618 662 L612 677 L612 693 L618 707 L629 717 L646 723 L668 722 L677 719 L687 713 L688 706 L675 713 L667 715 L656 715 L649 713 L639 706 L632 692 L633 684 L691 684 L692 676 L690 667 L686 659 L678 651 L662 645 L641 646Z"/><path d="M632 671 L635 663 L642 655 L650 652 L657 652 L664 655 L668 659 L672 667 L673 675 L671 677 L633 677Z"/><path d="M722 647 L714 651 L707 658 L704 666 L706 676 L714 684 L748 697 L752 701 L753 707 L749 713 L743 716 L731 717 L720 714 L706 706 L705 716 L713 720 L726 723 L744 723 L755 720 L762 716 L769 708 L770 695 L768 691 L763 686 L754 681 L727 671 L723 667 L722 661 L728 654 L735 652 L748 653 L764 661 L765 652 L758 648 L747 645 L731 645Z"/><path d="M805 622 L790 628 L789 646 L780 647 L779 654 L788 655 L790 657 L790 709 L793 716 L801 722 L817 723 L830 718 L833 715 L833 711 L819 715 L813 713 L808 706 L808 656 L831 655 L832 647 L809 647 L808 622Z"/></g>
+        </g>
+      </svg>
+    </div>
+    <div class="art-veil"></div>
+  </div>
+
+  <main class="auth-shell">
+    <section class="auth-card" aria-labelledby="authHeading">
+      <header class="auth-top">
+        <a class="brand" href="auth.html" aria-label="LUMI-VEST">
+          <img class="logo" src="img/IMG-20260425-WA0004.jpg" alt="" width="50" height="48" />
+          <span class="lumi">LUMI-VEST</span>
+        </a>
+        <button class="icon-btn theme-toggle" type="button" id="themeToggle" aria-label="Toggle light / dark mode">
+          <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8.5 8.5 0 0 1 10.5 4 8.5 8.5 0 1 0 20 13.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+
+      <fieldset class="roles" id="roles">
+        <legend>I am a…</legend>
+        <label class="role"><input type="radio" name="role" value="customer" checked/><span class="role-card"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.8-3.6 3.8-5.5 7.5-5.5s6.7 1.9 7.5 5.5" stroke-linecap="round"/></svg><b>Customer</b><small>Browse &amp; save homes</small></span></label>
+        <label class="role"><input type="radio" name="role" value="agent" /><span class="role-card"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7.5" width="18" height="12" rx="2.5"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3 13h18" stroke-linecap="round"/></svg><b>Agent</b><small>List &amp; manage homes</small></span></label>
+        <label class="role"><input type="radio" name="role" value="company" /><span class="role-card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V6.5L12 3l8 3.5V20M2.5 20h19M8.5 9h2M13.5 9h2M8.5 13h2M13.5 13h2M10.5 20v-3.5h3V20" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Company</b><small>Real estate firm</small></span></label>
+      </fieldset>
+
+      <div class="seg" role="tablist" aria-label="Account" id="authTabs">
+        <span class="seg-pill" aria-hidden="true"></span>
+        <button class="seg-btn" role="tab" id="tabSignin" type="button" aria-selected="true" aria-controls="panelSignin" data-tab="signin">Sign in</button>
+        <button class="seg-btn" role="tab" id="tabSignup" type="button" aria-selected="false" aria-controls="panelSignup" data-tab="signup" tabindex="-1">Sign up</button>
+      </div>
+
+      <!-- ===== SIGN IN ===== -->
+      <div class="panel" id="panelSignin" role="tabpanel" aria-labelledby="tabSignin">
+        <h1 id="authHeading" class="auth-title">Welcome back</h1>
+        <p class="auth-sub" id="siSub">Sign in to browse verified homes across Kaduna.</p>
+
+        <div class="alert" id="siAlert" role="alert" tabindex="-1" hidden></div>
+
+        <form id="signinForm" novalidate>
+          <div class="field">
+            <label for="siId">Email or username</label>
+            <div class="input-wrap"><input id="siId" name="siId" type="text" autocomplete="username" placeholder="you@example.com or username" required aria-describedby="siIdErr" autocapitalize="off" spellcheck="false"/></div>
+            <p class="field-err" id="siIdErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="siPassword">Password</label>
+            <div class="input-wrap">
+              <input id="siPassword" name="siPassword" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" required aria-describedby="siPasswordErr" />
+              <button class="pw-toggle" type="button" aria-label="Show password" aria-pressed="false" data-toggle="siPassword"><svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <p class="field-err" id="siPasswordErr" hidden></p>
+          </div>
+          <p class="caps-note" id="siCaps" hidden>Caps Lock is on</p>
+          <div class="row-between">
+            <label class="check"><input type="checkbox" id="siRemember" /><span>Keep me signed in</span></label>
+          </div>
+          <button class="btn btn-gradient auth-submit" type="submit" id="siSubmit"><span class="btn-label" id="siLabel">Sign in as customer</span><span class="spinner" aria-hidden="true"></span></button>
+        </form>
+
+        <div class="divider"><span>or</span></div>
+        <div class="google-slot" data-google="signin"></div>
+        <p class="switch-note">New to LUMI-VEST? <button class="link-btn" type="button" data-tab="signup">Create an account</button></p>
+      </div>
+
+      <!-- ===== SIGN UP ===== -->
+      <div class="panel" id="panelSignup" role="tabpanel" aria-labelledby="tabSignup" hidden>
+        <h2 class="auth-title" id="suHeading">Create your account</h2>
+        <p class="auth-sub" id="suSub">It takes under a minute. No spam, ever.</p>
+
+        <div class="alert" id="suAlert" role="alert" tabindex="-1" hidden></div>
+
+        <form id="signupForm" novalidate>
+          <div class="field-grid">
+          <div class="field">
+            <label for="suFirst">First name</label>
+            <div class="input-wrap"><input id="suFirst" name="suFirst" type="text" autocomplete="given-name" placeholder="Jane" required aria-describedby="suFirstErr" /></div>
+            <p class="field-err" id="suFirstErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="suLast">Last name</label>
+            <div class="input-wrap"><input id="suLast" name="suLast" type="text" autocomplete="family-name" placeholder="Doe" required aria-describedby="suLastErr" /></div>
+            <p class="field-err" id="suLastErr" hidden></p>
+          </div>
+          </div>
+          <div class="field">
+            <label for="suUsername">Username</label>
+            <div class="input-wrap"><input id="suUsername" name="suUsername" type="text" autocomplete="username" placeholder="jane_doe" required aria-describedby="suUsernameErr" autocapitalize="off" spellcheck="false" maxlength="20"/></div>
+            <p class="field-err" id="suUsernameErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="suEmail">Email</label>
+            <div class="input-wrap"><input id="suEmail" name="suEmail" type="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="suEmailErr" autocapitalize="off" spellcheck="false" inputmode="email"/></div>
+            <p class="field-err" id="suEmailErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="suPhone">Phone number</label>
+            <div class="input-wrap"><input id="suPhone" name="suPhone" type="tel" autocomplete="tel" placeholder="+234 801 234 5678" required aria-describedby="suPhoneErr" inputmode="tel"/></div>
+            <p class="field-err" id="suPhoneErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="suAddress">Location address</label>
+            <div class="input-wrap"><input id="suAddress" name="suAddress" type="text" autocomplete="street-address" placeholder="Street, area, city, state" required aria-describedby="suAddressErr" maxlength="160"/></div>
+            <p class="field-err" id="suAddressErr" hidden></p>
+          </div>
+          <div class="role-fields" data-for="company" hidden>
+          <div class="field-grid">
+          <div class="field">
+            <label for="suCompany">Company name</label>
+            <div class="input-wrap"><input id="suCompany" name="suCompany" type="text" autocomplete="organization" placeholder="Acme Realty Ltd" required aria-describedby="suCompanyErr" /></div>
+            <p class="field-err" id="suCompanyErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="suReg">CAC registration no.</label>
+            <div class="input-wrap"><input id="suReg" name="suReg" type="text" autocomplete="off" placeholder="RC 1234567" required aria-describedby="suRegErr" autocapitalize="characters" spellcheck="false"/></div>
+            <p class="field-err" id="suRegErr" hidden></p>
+          </div>
+          </div>
+          </div>
+          <div class="role-fields" data-for="agent" hidden>
+          <div class="field-grid">
+          <div class="field">
+            <label for="suAgency">Agency (optional)</label>
+            <div class="input-wrap"><input id="suAgency" name="suAgency" type="text" autocomplete="organization" placeholder="Your agency" aria-describedby="suAgencyErr" /></div>
+            <p class="field-err" id="suAgencyErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="suLicence">Licence / ID no. (optional)</label>
+            <div class="input-wrap"><input id="suLicence" name="suLicence" type="text" autocomplete="off" placeholder="ESVARBON no." aria-describedby="suLicenceErr" spellcheck="false"/></div>
+            <p class="field-err" id="suLicenceErr" hidden></p>
+          </div>
+          </div>
+          </div>
+          <div class="field">
+            <label for="suPassword">Password</label>
+            <div class="input-wrap">
+              <input id="suPassword" name="suPassword" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" required aria-describedby="suPasswordErr" minlength="8" maxlength="128"/>
+              <button class="pw-toggle" type="button" aria-label="Show password" aria-pressed="false" data-toggle="suPassword"><svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <p class="field-err" id="suPasswordErr" hidden></p>
+          </div>
+          <div class="meter" id="suMeter" data-score="0" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <p class="meter-label" id="suMeterLabel" aria-live="polite">Use 8+ characters — a longer phrase is stronger.</p>
+          <div class="field">
+            <label for="suConfirm">Confirm password</label>
+            <div class="input-wrap">
+              <input id="suConfirm" name="suConfirm" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" required aria-describedby="suConfirmErr" />
+              <button class="pw-toggle" type="button" aria-label="Show password" aria-pressed="false" data-toggle="suConfirm"><svg class="eye-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <p class="field-err" id="suConfirmErr" hidden></p>
+          </div>
+          <button class="btn btn-gradient auth-submit" type="submit" id="suSubmit"><span class="btn-label" id="suLabel">Create customer account</span><span class="spinner" aria-hidden="true"></span></button>
+        </form>
+
+        <div class="divider"><span>or</span></div>
+        <div class="google-slot" data-google="signup"></div>
+        <p class="switch-note">Already have an account? <button class="link-btn" type="button" data-tab="signin">Sign in</button></p>
+      </div>
+
+      <noscript><p class="alert alert--static">JavaScript is required to sign in.</p></noscript>
+    </section>
+  </main>
+
+  <template id="googleBtnTpl">
+    <button class="btn-google" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.17a5.28 5.28 0 0 1-2.29 3.46v2.87h3.7C21.74 18.8 23 15.8 23 12.27z"/><path fill="#34A853" d="M12 23.5c3.1 0 5.7-1.03 7.58-2.78l-3.7-2.87c-1.03.69-2.34 1.1-3.88 1.1-2.98 0-5.5-2.01-6.4-4.72H1.78v2.96A11.5 11.5 0 0 0 12 23.5z"/><path fill="#FBBC05" d="M5.6 14.23a6.9 6.9 0 0 1 0-4.46V6.81H1.78a11.5 11.5 0 0 0 0 10.38l3.82-2.96z"/><path fill="#EA4335" d="M12 5.05c1.69 0 3.2.58 4.39 1.72l3.29-3.29C17.7 1.64 15.1.5 12 .5A11.5 11.5 0 0 0 1.78 6.81L5.6 9.77C6.5 7.06 9.02 5.05 12 5.05z"/></svg><span>Continue with Google</span></button>
+  </template>
+
+  <script src="auth.js?v=1" defer></script>
+</body>
+</html>
