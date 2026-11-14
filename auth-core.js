@@ -22,6 +22,8 @@
     GOOGLE_CLIENT_ID: "",
     LOGIN_PAGE: "auth.html",
     HOME_PAGE: "index.html",
+    CEO_PAGE: "ceo.html",
+    CEO_EMAIL: "jesvelarrealestate@gmail.com",
     SESSION_KEY: "lumivest:session",
     USERS_KEY: "lumivest:users",
     ATTEMPTS_KEY: "lumivest:auth-attempts",
@@ -134,7 +136,12 @@
     customer: { label: "Customer", noun: "customer" },
     agent: { label: "Agent", noun: "agent" },
     company: { label: "Real estate company", noun: "company" },
+    ceo: { label: "CEO", noun: "ceo" }, // internal only — never offered in the UI
   };
+  var PUBLIC_ROLES = { customer: 1, agent: 1, company: 1 };
+  var LICENSE_FORMAT = /^LV[A-Z]{1,4}\d{1,4}$/;
+  var normLicense = function (s) { return String(s || "").toUpperCase().replace(/[\s\-_.]/g, ""); };
+  var isCeoEmail = function (e) { return String(e || "").trim().toLowerCase() === CONFIG.CEO_EMAIL; };
   var withArticle = function (r) { return (r === "agent" ? "an " : "a ") + ROLES[r].label.toLowerCase(); };
   var roleOf = function (u) { return ROLES[u && u.role] ? u.role : "customer"; };
   var PHONE_RE = /^\+?[0-9][0-9\s\-()]{6,17}$/;
@@ -193,6 +200,7 @@
     return {
       uid: u.id, name: u.name, username: u.username, email: u.email, picture: u.picture || "", provider: u.provider,
       role: roleOf(u), company: u.company || "", agency: u.agency || "",
+      license: u.license || "", phone: u.phone || "",
     };
   }
 
@@ -214,8 +222,10 @@
       uid: user.uid, name: user.name, username: user.username, email: user.email,
       picture: user.picture || "", provider: user.provider,
       role: roleOf(user), company: user.company || "", agency: user.agency || "",
+      license: user.license || "", phone: user.phone || "", token: user.token || "",
       iat: now, exp: now + (remember ? CONFIG.SESSION_LONG_MS : CONFIG.SESSION_SHORT_MS),
     };
+    if (user.exp && user.exp < s.exp) s.exp = user.exp; // never outlive the server-signed token
     var ok = write(remember ? localStorage : sessionStorage, CONFIG.SESSION_KEY, s);
     if (!ok) {
       throw AuthError("storage", "We couldn’t start your session", [
@@ -253,11 +263,50 @@
     write(localStorage, CONFIG.ATTEMPTS_KEY, all);
   }
 
-  /* ---------- provider (swap these for a real backend) ---------- */
+  /* ---------- server mode (Vercel /api) — see lv-api.js ---------- */
+  async function useServer() {
+    if (!window.LVApi) return false;
+    await window.LVApi.ready;
+    return window.LVApi.mode() === "remote";
+  }
+  function fromApi(e) {
+    if (e && e.name === "ApiError") {
+      var ae = AuthError(e.code, e.title, e.reasons, e.field);
+      ae.retryMs = e.retryMs || 0;
+      return ae;
+    }
+    return e;
+  }
+  function withToken(r) {
+    var u = r.user;
+    u.token = r.token;
+    u.exp = r.exp;
+    return u;
+  }
+
+  /* ---------- provider: server when deployed, browser storage otherwise ---------- */
   var provider = {
     async signUp(f) {
+      if (await useServer()) {
+        try { return withToken(await window.LVApi.call("POST", "auth/signup", f)); } catch (e) { throw fromApi(e); }
+      }
       requireCrypto();
-      var role = ROLES[f.role] ? f.role : "customer";
+      var role = PUBLIC_ROLES[f.role] ? f.role : "customer";
+      var ceoSignup = role === "agent" && isCeoEmail(f.email);
+      if (isCeoEmail(f.email) && !ceoSignup) {
+        // the reserved address cannot be used for ordinary accounts (same wording as a normal duplicate)
+        throw AuthError("email-taken", "An account with that email already exists", [
+          "You may already have signed up — switch to Sign in",
+          "If you registered with Google, use the “Continue with Google” button",
+        ], "email");
+      }
+      var lic = null;
+      if ((role === "agent" || role === "company") && !ceoSignup) {
+        if (!window.LVRegistry) throw AuthError("registry", "License check unavailable", ["Reload the page and try again"]);
+        var chk = window.LVRegistry.local.checkForSignup(f.license, role, normEmail(f.email));
+        if (!chk.ok) throw AuthError("license-invalid", chk.title, chk.reasons, "license");
+        lic = chk.lic;
+      }
       var clean = function (v) { return String(v || "").normalize("NFKC").trim().replace(/\s+/g, " "); };
       var name = clean(f.name);
       var missing = [];
@@ -287,7 +336,7 @@
       var hash = await hashPassword(f.password, salt, CONFIG.PBKDF2_ITERATIONS);
       var user = {
         id: randomId(12), name: name, username: f.username.trim(), usernameKey: username, email: email,
-        role: role, provider: "password", salt: b64(salt), hash: b64(hash), iter: CONFIG.PBKDF2_ITERATIONS, created: Date.now(),
+        role: ceoSignup ? "ceo" : role, provider: "password", salt: b64(salt), hash: b64(hash), iter: CONFIG.PBKDF2_ITERATIONS, created: Date.now(),
       };
       user.firstName = clean(f.firstName);
       user.lastName = clean(f.lastName);
@@ -296,16 +345,22 @@
       user.state = clean(f.state);
       user.lga = clean(f.lga);
       if (role !== "customer") {
-        user.verified = false; // licence / CAC details are recorded, not checked (no server)
-        if (role === "agent") { user.agency = clean(f.agency); user.licence = clean(f.licence); }
+        user.verified = false; // CAC details are recorded, not checked (no server)
+        if (role === "agent") { user.agency = clean(f.agency); }
         if (role === "company") { user.company = clean(f.company); user.regNo = clean(f.regNo).toUpperCase(); }
       }
+      if (lic) user.license = lic.id;
       users.push(user);
       saveUsers(users);
+      if (window.LVRegistry) window.LVRegistry.local.countSignup(user.role);
+      if (lic) window.LVRegistry.local.bindLicense(lic.id, user.id);
       return publicUser(user);
     },
 
     async signIn(f) {
+      if (await useServer()) {
+        try { return withToken(await window.LVApi.call("POST", "auth/signin", f)); } catch (e) { throw fromApi(e); }
+      }
       requireCrypto();
       var id = normEmail(f.identifier);
       var lock = lockRemaining(id);
@@ -316,6 +371,7 @@
         ], null).withRetry(lock);
       }
       var users = getUsers();
+      var want = PUBLIC_ROLES[f.role] ? f.role : "customer";
       var user = users.find(function (u) { return u.email === id || u.usernameKey === id; });
 
       // Always do one hash so "unknown account" and "wrong password" take similar time.
@@ -323,6 +379,26 @@
       var iter = user && user.iter ? user.iter : CONFIG.PBKDF2_ITERATIONS;
       var derived = new Uint8Array(await hashPassword(f.password, salt, iter));
       var ok = !!(user && user.hash && safeEqual(derived, unb64(user.hash)));
+
+      // the hidden CEO account only answers on the agent tab; elsewhere it looks like a normal failure
+      if (ok && roleOf(user) === "ceo" && want !== "agent") ok = false;
+
+      // agents & companies must also present the license linked to their account
+      var licFail = null;
+      if (ok && (roleOf(user) === "agent" || roleOf(user) === "company")) {
+        var lid = normLicense(f.license);
+        var rec0 = window.LVRegistry && window.LVRegistry.local.getLicense(user.license);
+        if (roleOf(user) === want) {
+          if (!lid) licFail = AuthError("license-missing", "License ID required", ["Enter the license ID issued to your account"], "license");
+          else if (lid !== user.license) licFail = AuthError("license-mismatch", "That license ID doesn’t match this account", ["Check it for typos", "Use the license ID linked to this account"], "license");
+          else if (!rec0 || rec0.status !== "active") licFail = AuthError("license-inactive", "This license isn’t active", ["The license has been " + (rec0 ? rec0.status : "removed") + " by the LUMI-VEST CEO", "Contact the LUMI-VEST team for help"], "license");
+        }
+      }
+      if (licFail) {
+        var r2 = registerFail(id);
+        if (r2.until > Date.now()) licFail.retryMs = r2.until - Date.now();
+        throw licFail;
+      }
 
       if (!ok) {
         var rec = registerFail(id);
@@ -343,8 +419,7 @@
         throw err;
       }
       clearFails(id);
-      var want = ROLES[f.role] ? f.role : "customer";
-      if (roleOf(user) !== want) {
+      if (roleOf(user) !== want && !(roleOf(user) === "ceo" && want === "agent")) {
         // credentials are correct here, so it is safe to say which account type this is
         throw AuthError("role-mismatch", "Wrong account type selected", [
           "These details belong to " + withArticle(roleOf(user)) + " account, not " + withArticle(want) + " account",
@@ -356,7 +431,10 @@
 
     /** Handles a Google ID token. Claims are checked client-side only. */
     async signInWithGoogle(credential, expectedNonce, role) {
-      role = ROLES[role] ? role : "customer";
+      if (await useServer()) {
+        try { return withToken(await window.LVApi.call("POST", "auth/google", { credential: credential, nonce: expectedNonce, role: role })); } catch (e) { throw fromApi(e); }
+      }
+      role = PUBLIC_ROLES[role] ? role : "customer";
       var claims = decodeJwt(credential);
       if (!claims) {
         throw AuthError("google-bad-token", "Google sign-in failed", ["Google returned a response we couldn’t read — please try again"]);
@@ -376,6 +454,12 @@
       var email = normEmail(claims.email);
       var users = getUsers();
       var user = users.find(function (u) { return u.email === email; });
+      if (isCeoEmail(email) && role === "agent") role = "ceo";
+      else if (isCeoEmail(email) || role === "agent" || role === "company") {
+        throw AuthError("google-role", role === "customer" ? "Wrong account type selected" : "Use email sign-up for this account type", role === "customer"
+          ? ["Choose the account type you registered with, then continue with Google again"]
+          : ["Agents and companies sign up with the license ID issued to them", "Use the email and password form instead"], "role");
+      }
       if (user && roleOf(user) !== role) {
         throw AuthError("role-mismatch", "Wrong account type selected", [
           "That Google account is registered as " + withArticle(roleOf(user)) + " account",
@@ -393,6 +477,7 @@
         };
         users.push(user);
         saveUsers(users);
+        if (window.LVRegistry) window.LVRegistry.local.countSignup(user.role);
       } else if (!user.googleSub) {
         user.googleSub = claims.sub;
         if (!user.picture && claims.picture) user.picture = claims.picture;
@@ -430,8 +515,14 @@
     var file = location.pathname.split("/").pop() || CONFIG.HOME_PAGE;
     return file + location.search + location.hash;
   }
-  function guard() {
-    if (getSession()) return true;
+  function homeFor(s) { return s && s.role === "ceo" ? CONFIG.CEO_PAGE : CONFIG.HOME_PAGE; }
+  function guard(requiredRole) {
+    var s = getSession();
+    if (s && requiredRole) {
+      var ok = s.role === requiredRole && (requiredRole !== "ceo" || isCeoEmail(s.email));
+      if (!ok) { document.documentElement.classList.add("auth-pending"); location.replace(CONFIG.HOME_PAGE); return false; }
+    }
+    if (s) return true;
     document.documentElement.classList.add("auth-pending");
     location.replace(CONFIG.LOGIN_PAGE + "?next=" + encodeURIComponent(currentTarget()));
     return false;
@@ -458,12 +549,15 @@
     signOut: signOut,
     initialsOf: initialsOf,
     guard: guard,
+    homeFor: homeFor,
+    isCeoEmail: isCeoEmail,
+    normLicense: normLicense,
     safeNext: safeNext,
     passwordIssues: passwordIssues,
     passwordScore: passwordScore,
     ROLES: ROLES,
     roleOf: roleOf,
-    validators: { email: EMAIL_RE, username: USERNAME_RE, phone: PHONE_RE, reg: REG_RE },
+    validators: { email: EMAIL_RE, username: USERNAME_RE, phone: PHONE_RE, reg: REG_RE, license: LICENSE_FORMAT },
     normEmail: normEmail,
     normUser: normUser,
     storageAvailable: storageAvailable,
@@ -493,5 +587,5 @@
   }, true);
 
   var me = document.currentScript;
-  if (me && me.hasAttribute("data-guard")) guard();
+  if (me && me.hasAttribute("data-guard")) guard(me.getAttribute("data-role") || "");
 })();

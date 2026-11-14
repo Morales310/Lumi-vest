@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0a0907" />
+  <meta name="robots" content="noindex" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self'; font-src https://fonts.gstatic.com; frame-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'" />
+  <title>Apply to list · LUMI-VEST</title>
+  <link rel="icon" href="img/IMG-20260425-WA0004.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="auth.css?v=3" />
+  <link rel="stylesheet" href="apply.css?v=1" />
+  <script src="auth-core.js?v=6"></script>
+  <script src="lv-api.js?v=2"></script>
+</head>
+<body class="auth-body apply-body">
+
+  <div class="auth-art" aria-hidden="true">
+    <div class="art-stage"><img class="art-img" src="img/IMG-20260425-WA0004.jpg" alt="" width="1024" height="1024" decoding="async" /></div>
+    <div class="art-veil"></div>
+  </div>
+
+  <main class="auth-shell">
+    <section class="auth-card" aria-labelledby="applyHeading">
+      <header class="auth-top">
+        <a class="brand" href="index.html" aria-label="Back to LUMI-VEST">
+          <img class="logo" src="img/IMG-20260425-WA0004.jpg" alt="" width="50" height="48" />
+          <span class="lumi">LUMI-VEST</span>
+        </a>
+        <button class="icon-btn theme-toggle" type="button" id="themeToggle" aria-label="Toggle light / dark mode">
+          <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8.5 8.5 0 0 1 10.5 4 8.5 8.5 0 1 0 20 13.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+
+      <h1 class="auth-title" id="applyHeading">Apply to list on LUMI-VEST</h1>
+      <p class="auth-sub">The LUMI-VEST CEO reviews every application. If approved, you receive a license ID that unlocks your agent or company account.</p>
+
+      <div class="alert" id="applyStatus" role="status" hidden></div>
+
+      <div id="applyFormWrap">
+        <p class="privacy-note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" stroke-linecap="round"/></svg>
+          <span id="privacyText">Your photo and NIN are kept only for review and are deleted as soon as a decision is made.</span>
+        </p>
+
+        <div class="alert" id="applyAlert" role="alert" tabindex="-1" hidden></div>
+
+        <form id="applyForm" novalidate>
+          <fieldset class="roles roles--two" id="kindBox">
+            <legend>Applying as</legend>
+            <label class="role"><input type="radio" name="kind" value="agent" checked /><span class="role-card"><b>Individual agent</b><small>Licensed to list as a person</small></span></label>
+            <label class="role"><input type="radio" name="kind" value="company" /><span class="role-card"><b>Real estate company</b><small>Licensed to list as a firm</small></span></label>
+          </fieldset>
+
+          <div class="field" id="companyField" hidden>
+            <label for="aCompany">Company name</label>
+            <div class="input-wrap"><input id="aCompany" name="aCompany" type="text" autocomplete="organization" placeholder="Acme Realty Ltd" aria-describedby="aCompanyErr" /></div>
+            <p class="field-err" id="aCompanyErr" hidden></p>
+          </div>
+
+          <div class="field">
+            <label for="aName" id="aNameLabel">Full name</label>
+            <div class="input-wrap"><input id="aName" name="aName" type="text" autocomplete="name" placeholder="Jane Doe" required aria-describedby="aNameErr" /></div>
+            <p class="field-err" id="aNameErr" hidden></p>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="aPhone">Phone number</label>
+              <div class="input-wrap"><input id="aPhone" name="aPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+234 801 234 5678" required aria-describedby="aPhoneErr" /></div>
+              <p class="field-err" id="aPhoneErr" hidden></p>
+            </div>
+            <div class="field">
+              <label for="aEmail">Email address</label>
+              <div class="input-wrap"><input id="aEmail" name="aEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" required aria-describedby="aEmailErr" /></div>
+              <p class="field-err" id="aEmailErr" hidden></p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="aAddress">Address</label>
+            <div class="input-wrap"><input id="aAddress" name="aAddress" type="text" autocomplete="street-address" placeholder="Street, area, city, state" maxlength="160" required aria-describedby="aAddressErr" /></div>
+            <p class="field-err" id="aAddressErr" hidden></p>
+          </div>
+          <div class="field">
+            <label for="aNin">NIN (National Identification Number)</label>
+            <div class="input-wrap"><input id="aNin" name="aNin" type="text" inputmode="numeric" autocomplete="off" placeholder="11 digits" maxlength="11" required aria-describedby="aNinErr" /></div>
+            <p class="field-err" id="aNinErr" hidden></p>
+          </div>
+
+          <div class="field">
+            <span class="label-like" id="aPhotoLabel">Your photo</span>
+            <label class="photo-drop" for="aPhoto" id="photoDrop">
+              <img id="photoPreview" alt="Preview of your photo" hidden />
+              <span class="photo-empty" id="photoEmpty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="3.6"/><path d="M4.5 20c.8-3.6 3.8-5.5 7.5-5.5s6.7 1.9 7.5 5.5" stroke-linecap="round"/></svg>
+                <b>Tap to add a clear face photo</b>
+                <small>JPG or PNG · kept only on this device</small>
+              </span>
+              <input id="aPhoto" name="aPhoto" type="file" accept="image/*" aria-labelledby="aPhotoLabel" aria-describedby="aPhotoErr" />
+            </label>
+            <p class="field-err" id="aPhotoErr" hidden></p>
+          </div>
+
+          <label class="check consent"><input type="checkbox" id="aConsent" /><span>I confirm these details are mine and agree to them being reviewed.</span></label>
+          <p class="field-err" id="aConsentErr" hidden></p>
+
+          <button class="btn btn-gradient auth-submit" type="submit" id="applySubmit"><span class="btn-label">Submit application</span><span class="spinner" aria-hidden="true"></span></button>
+        </form>
+      </div>
+
+      <details class="track" id="trackBox">
+        <summary>Already applied? Check your application</summary>
+        <form id="trackForm" novalidate>
+          <div class="field-grid">
+            <div class="field">
+              <label for="tRef">Reference</label>
+              <div class="input-wrap"><input id="tRef" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="LV-ABC123" maxlength="12" /></div>
+            </div>
+            <div class="field">
+              <label for="tEmail">Email used</label>
+              <div class="input-wrap"><input id="tEmail" type="email" autocomplete="email" autocapitalize="off" placeholder="you@example.com" /></div>
+            </div>
+          </div>
+          <button class="btn btn-ghost" type="submit">Check status</button>
+        </form>
+      </details>
+
+      <p class="switch-note"><a class="link-btn" href="index.html">← Back to homes</a></p>
+    </section>
+  </main>
+
+  <script src="lv-registry.js?v=3"></script>
+  <script src="apply.js?v=2"></script>
+</body>
+</html>

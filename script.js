@@ -14,6 +14,17 @@ const CONTACT = {
   hostPhoto: "img/jesevelar.jpeg",
 };
 
+/* Who the Call / WhatsApp / Email / viewing buttons reach for a given listing. */
+function contactFor(p) {
+  const c = p && p.contact;
+  if (c && (c.phone || c.email)) {
+    const digits = String(c.phone || "").replace(/[^\d]/g, "");
+    const wa = digits.startsWith("0") ? "234" + digits.slice(1) : digits;
+    return { phone: wa ? "+" + wa : "", wa, email: c.email || "", hostName: c.name || "Listing agent", hostPhoto: "", partner: true };
+  }
+  return CONTACT;
+}
+
 const U = (id) =>
   `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1200&q=80`;
 
@@ -284,12 +295,28 @@ const CREDS_KEY = "lumivest:creds";
 const authMe = () => (window.LumiAuth && window.LumiAuth.getSession()) || null;
 const myRole = () => (authMe() ? authMe().role : "customer");
 const isPartner = () => myRole() === "agent" || myRole() === "company"; // may list properties
+const isCeo = () => myRole() === "ceo" && !!window.LumiAuth && window.LumiAuth.isCeoEmail(authMe().email);
+const GATE_KEY = "lumivest:gate";
 /* Legacy listings (no ownerId) belong to the LUMI-VEST house account. */
 const HOUSE = "house";
 const ownerKey = () => {
   const m = authMe();
   if (!m) return "anon";
-  return String(m.email || "").toLowerCase() === ADMIN_EMAIL ? HOUSE : m.uid;
+  if (isCeo()) return HOUSE; // the CEO owns the house account and sees everything
+  return m.license || m.uid; // agents & companies: listings belong to their license ID
+};
+const activeLicense = () => {
+  const m = authMe();
+  const lic = m && m.license && window.LVRegistry ? window.LVRegistry.getLicense(m.license) : null;
+  return lic && lic.status === "active" ? lic : null;
+};
+const partnerGatePassed = () => {
+  const m = authMe();
+  try {
+    return !!m && isPartner() && !!activeLicense() && sessionStorage.getItem(GATE_KEY) === `${m.uid}|${m.license}`;
+  } catch {
+    return false;
+  }
 };
 const ownerOf = (p) => (p && p.ownerId) || HOUSE;
 
@@ -301,7 +328,7 @@ const adminCreds = () => {
     /* fall through */
   }
   const m = authMe();
-  return m && isPartner() ? { email: m.email } : null;
+  return m && partnerGatePassed() ? { email: m.email } : null;
 };
 
 const PUBLISH = {
@@ -865,7 +892,22 @@ function cardHTML(p, i) {
   </article>`;
 }
 
+/* The CEO dashboard reads this snapshot (it's a separate page with no access to this script's state). */
+function snapshotListings() {
+  try {
+    if (!isCeo()) return;
+    const list = getListings().map((p) => ({
+      id: p.id, title: p.title, type: p.type, mode: p.mode, status: p.status, price: p.price,
+      draft: !!p.draft, location: p.location, ownerId: p.ownerId || "",
+    }));
+    localStorage.setItem("lumivest:listing-snapshot", JSON.stringify({ t: Date.now(), list }));
+  } catch {
+    /* best effort */
+  }
+}
+
 function render() {
+  snapshotListings();
   const list = sortList(getListings().filter(matches));
   grid.innerHTML = list.map(cardHTML).join("");
   emptyState.hidden = list.length > 0;
@@ -1064,6 +1106,8 @@ menuDrop.addEventListener("click", (e) => {
   const initials = window.LumiAuth.initialsOf(me);
   const dot = $(".avatar-dot");
   if (dot) dot.textContent = initials;
+  const ceoLink = $("#menuCeoLink");
+  if (ceoLink) ceoLink.hidden = me.role !== "ceo";
   const box = $("#menuUser");
   if (box) {
     $("#menuUserName").textContent = label;
@@ -1138,10 +1182,12 @@ function modalHTML(p) {
       <ul class="mb-highlights">${(p.highlights || []).map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
 
       <div class="mb-host">
-        <img src="${CONTACT.hostPhoto}" alt="${CONTACT.hostName}">
+        ${contactFor(p).hostPhoto
+          ? `<img src="${contactFor(p).hostPhoto}" alt="${esc(contactFor(p).hostName)}">`
+          : `<span class="host-initial" aria-hidden="true">${esc((window.LumiAuth ? window.LumiAuth.initialsOf({ name: contactFor(p).hostName }) : "A"))}</span>`}
         <div>
-          <strong>Hosted by ${CONTACT.hostName}</strong>
-          <span>Top-rated agent · typically replies within hours</span>
+          <strong>Hosted by ${esc(contactFor(p).hostName)}</strong>
+          <span>${contactFor(p).partner ? `Licensed ${p.ownerRole === "company" ? "company" : "agent"} · ${esc(p.contact.license || "")}` : "Top-rated agent · typically replies within hours"}</span>
         </div>
       </div>
     </div>
@@ -1170,13 +1216,14 @@ function modalHTML(p) {
         <button type="button" class="btn btn-gradient" id="requestViewing">Request a viewing</button>
 
         <div class="booking-contact">
-          <a href="tel:${CONTACT.phone}">Call</a>
-          <a href="https://wa.me/${CONTACT.wa}?text=${encodeURIComponent(
-    `Hello ${CONTACT.hostName}, I'm interested in: ${p.title} (${p.location}).`
-  )}" target="_blank" rel="noopener">WhatsApp</a>
-          <a href="mailto:${CONTACT.email}?subject=${encodeURIComponent(
-    "Enquiry: " + p.title
-  )}">Email</a>
+          ${(() => {
+            const c = contactFor(p);
+            return `${c.phone ? `<a href="tel:${esc(c.phone)}">Call</a>` : ""}
+          ${c.wa ? `<a href="https://wa.me/${esc(c.wa)}?text=${encodeURIComponent(
+            `Hello ${c.hostName}, I'm interested in: ${p.title} (${p.location}).`
+          )}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
+          ${c.email ? `<a href="mailto:${esc(c.email)}?subject=${encodeURIComponent("Enquiry: " + p.title)}">Email</a>` : ""}`;
+          })()}
         </div>
 
         <p class="booking-safe">🔒 Never send payment before an inspection. LUMI-VEST only lists verified properties.</p>
@@ -1253,13 +1300,14 @@ function wireModal(p) {
     const name = form.name.value.trim();
     const phone = form.phone.value.trim();
     const msg = form.message.value.trim();
-    const text = `Hello ${CONTACT.hostName}, I'd like to request a viewing.\n\nProperty: ${
+    const c = contactFor(p);
+    const text = `Hello ${c.hostName}, I'd like to request a viewing.\n\nProperty: ${
       p.title
     }\nLocation: ${p.location}\nPrice: ${naira(p.price)}\n\nName: ${name}\nPhone: ${phone}${
       msg ? "\nMessage: " + msg : ""
     }`;
     window.open(
-      `https://wa.me/${CONTACT.wa}?text=${encodeURIComponent(text)}`,
+      `https://wa.me/${c.wa}?text=${encodeURIComponent(text)}`,
       "_blank",
       "noopener"
     );
@@ -1399,7 +1447,8 @@ const adminBody = $("#adminBody");
 let adminLastFocus = null;
 
 function adminSignedIn() {
-  if (isPartner()) return true; // agents & companies manage their own listings
+  if (isPartner()) return partnerGatePassed(); // license ID + email gate
+  if (!isCeo()) return false;
   try {
     if (!adminCreds()) return false;
     return sessionStorage.getItem("lumivest:admin") === "1";
@@ -1410,7 +1459,7 @@ function adminSignedIn() {
 
 function setAdminSignedIn(v) {
   if (!v) {
-    try { sessionStorage.removeItem(CREDS_KEY); } catch {}
+    try { sessionStorage.removeItem(CREDS_KEY); sessionStorage.removeItem(GATE_KEY); } catch {}
   }
   try {
     v
@@ -1424,8 +1473,7 @@ function setAdminSignedIn(v) {
 
 /* The menu entry is public; the publishing worker protects admin operations. */
 function canManageListings() {
-  const m = authMe();
-  return isPartner() || (m && String(m.email || "").toLowerCase() === ADMIN_EMAIL);
+  return isCeo() || isPartner(); // customers never see or reach the manage-listings flow
 }
 
 function updateAdminVisibility() {
@@ -1441,7 +1489,7 @@ function checkAdminHash() {
 
 function openAdmin() {
   if (!canManageListings()) {
-    toast("Managing listings is for agent and company accounts", "error");
+    toast("Managing listings is only available to licensed agents and companies", "error");
     return;
   }
   adminLastFocus = document.activeElement;
@@ -1471,27 +1519,46 @@ document.addEventListener("keydown", (e) => {
 /* --- sign-in gate --- */
 function renderGate() {
   adminBody.onclick = null;
+  const partner = isPartner();
   adminBody.innerHTML = `
     <div class="gate">
       <div class="gate-lock">🔒</div>
       <h3>Admin access</h3>
-      <p>Sign in with the authorized admin email to manage listings.</p>
-      <input type="email" id="gateEmail" placeholder="admin email" autocomplete="username">
+      <p>${partner
+        ? "Confirm your account email and license ID to manage your listings."
+        : "Sign in with the authorized admin email to manage listings."}</p>
+      <input type="email" id="gateEmail" placeholder="${partner ? "account email" : "admin email"}" autocomplete="username">
+      ${partner ? '<input type="text" id="gateLicense" placeholder="license ID (e.g. LVJD007)" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="14">' : ""}
       <button class="btn btn-gradient" id="gateSubmit">Sign in</button>
-      <p class="gate-hint">Restricted to authorised admins</p>
+      <p class="gate-hint">${partner ? "Your listings are tied to your license ID" : "Restricted to authorised admins"}</p>
     </div>`;
 
   const input = $("#gateEmail");
-  const deny = (msg) => {
-    input.classList.remove("shake");
-    void input.offsetWidth;
-    input.classList.add("shake");
+  const licInput = $("#gateLicense");
+  const deny = (msg, el = input) => {
+    el.classList.remove("shake");
+    void el.offsetWidth;
+    el.classList.add("shake");
     toast(msg, "error");
-    input.select();
+    el.select();
   };
+  if (licInput) licInput.addEventListener("input", () => (licInput.value = licInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "")));
+
   const attempt = async () => {
     const email = input.value.trim().toLowerCase();
-    if (email !== ADMIN_EMAIL) return deny("Access denied — that email isn’t authorised");
+    const me = authMe() || {};
+    if (partner) {
+      const lid = window.LumiAuth.normLicense(licInput.value);
+      if (email !== String(me.email || "").toLowerCase()) return deny("Access denied — use the email of the account you’re signed in with");
+      if (!lid) return deny("Enter your license ID", licInput);
+      if (lid !== me.license) return deny("Access denied — that license ID doesn’t belong to this account", licInput);
+      const lic = window.LVRegistry && window.LVRegistry.getLicense(lid);
+      if (!lic || lic.status !== "active")
+        return deny(`This license is ${lic ? lic.status : "not recognised"} — contact the LUMI-VEST team`, licInput);
+      try { sessionStorage.setItem(GATE_KEY, `${me.uid}|${me.license}`); } catch {}
+    } else {
+      if (!isCeo() || email !== ADMIN_EMAIL) return deny("Access denied — that email isn’t authorised");
+    }
     const btn = $("#gateSubmit");
     btn.disabled = true;
     btn.textContent = "Signing in…";
@@ -1502,14 +1569,16 @@ function renderGate() {
       const fresh = await fetchViaApi();
       if (fresh) { publishedListings = fresh; listingsCache = fresh; render(); }
     }
-    toast("Welcome back — admin unlocked");
+    toast(partner ? "Welcome — your listings are unlocked" : "Welcome back — admin unlocked");
     renderAdminList();
   };
 
   $("#gateSubmit").addEventListener("click", attempt);
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); attempt(); }
-  });
+  [input, licInput].filter(Boolean).forEach((el) =>
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); attempt(); }
+    })
+  );
   input.focus();
 }
 
@@ -1534,12 +1603,21 @@ function refreshGhCard() {
 }
 
 /* --- dashboard --- */
-const canEditListing = (p) => ownerKey() === HOUSE || ownerOf(p) === ownerKey();
+function logActivity(type, p, extra) {
+  try {
+    if (!window.LVRegistry) return;
+    window.LVRegistry.log(type, Object.assign({ id: p.id, title: p.title, owner: ownerOf(p), state: p.state || "", loc: p.location || "", ptype: p.type || "", mode: p.mode || "", price: p.price || 0 }, extra));
+  } catch {
+    /* logging must never break the admin panel */
+  }
+}
+
+const canEditListing = (p) => isCeo() || ownerOf(p) === ownerKey();
 
 function renderAdminList() {
   adminBody.onclick = null;
   const full = getListings();
-  const house = ownerKey() === HOUSE;
+  const house = isCeo();
   const list = house ? full : full.filter((p) => ownerOf(p) === ownerKey());
   const flagCount = house ? readFlags().length : 0;
 
@@ -1551,7 +1629,7 @@ function renderAdminList() {
         ${house ? '<button class="btn btn-ghost btn-sm" id="adminExport">Backup</button><button class="btn btn-ghost btn-sm" id="adminImport">Import</button>' : ""}
         ${flagCount ? `<button class="btn btn-ghost btn-sm" id="adminFlags">Flags (${flagCount})</button>` : ""}
         ${hasPending ? '<button class="btn btn-ghost btn-sm" id="adminDiscard">Discard unpublished</button>' : ""}
-        ${isPartner() ? "" : '<button class="btn btn-ghost btn-sm" id="adminLogout">Sign out</button>'}
+        <button class="btn btn-ghost btn-sm" id="adminLogout">Lock</button>
       </div>
     </div>
     <div class="admin-import" id="adminImportBox" hidden>
@@ -1615,7 +1693,7 @@ function renderAdminList() {
     logout.addEventListener("click", () => {
       setAdminSignedIn(false);
       renderGate();
-      toast("Signed out");
+      toast("Admin locked");
     });
 
   adminBody.onclick = (e) => {
@@ -1648,6 +1726,7 @@ function renderAdminList() {
       clone.title += " (copy)";
       clone.draft = true;
       current.splice(idx + 1, 0, clone);
+      logActivity("listing_added", clone, { via: "duplicate" });
       toast("Duplicated as draft");
     }
     if (act === "draft") {
@@ -1657,7 +1736,8 @@ function renderAdminList() {
     if (act === "del") {
       if (!confirm(`Delete “${current[idx].title}”? It will disappear for all visitors.`))
         return;
-      current.splice(idx, 1);
+      const gone = current.splice(idx, 1)[0];
+      logActivity("listing_removed", gone);
       toast("Listing deleted");
     }
 
@@ -2205,16 +2285,30 @@ function renderForm(p) {
       m.type = kindOf(m);
     });
 
-    // ownership (used for permissions and for the duplicate-media check)
+    // ownership (used for permissions, contact buttons and the duplicate-media check)
     const me = authMe() || {};
+    if (isPartner() && !activeLicense()) {
+      toast("Your license isn’t active — you can’t publish listings", "error");
+      return;
+    }
     if (p && p.ownerId) {
       listing.ownerId = p.ownerId;
       if (p.ownerName) listing.ownerName = p.ownerName;
       if (p.ownerRole) listing.ownerRole = p.ownerRole;
+      if (p.contact) listing.contact = p.contact;
     } else if (!p) {
       listing.ownerId = ownerKey();
       listing.ownerName = me.company || me.name || "LUMI-VEST";
-      listing.ownerRole = ownerKey() === HOUSE ? "house" : me.role || "agent";
+      listing.ownerRole = isCeo() ? "house" : me.role || "agent";
+    }
+    // the buttons on this listing reach whoever holds the license
+    if (isPartner() && listing.ownerId === ownerKey()) {
+      listing.contact = {
+        name: me.company || me.name || "",
+        phone: me.phone || "",
+        email: me.email || "",
+        license: me.license || "",
+      };
     }
 
     // silent duplicate-media guard: invisible unless it finds a conflict
@@ -2248,6 +2342,7 @@ function renderForm(p) {
     else current.unshift(listing);
 
     saveListings(current);
+    logActivity(p ? "listing_updated" : "listing_added", listing);
     render();
     renderAdminList();
     toast(p ? "Listing updated" : "Listing added");

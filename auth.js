@@ -28,8 +28,10 @@
   };
 
   /* Already signed in → straight through (also covers back/forward cache). */
+  var hasNext = !!params.get("next");
   function bounceIfSignedIn() {
-    if (Auth.getSession()) location.replace(NEXT);
+    var s = Auth.getSession();
+    if (s) location.replace(hasNext ? NEXT : Auth.homeFor(s));
   }
   bounceIfSignedIn();
   addEventListener("pageshow", function (e) { if (e.persisted) bounceIfSignedIn(); });
@@ -245,6 +247,12 @@
   });
   $("#siPassword").addEventListener("blur", function () { capsNote.hidden = true; });
 
+  ["#siLicense", "#suLicense"].forEach(function (sel) {
+    $(sel).addEventListener("input", function (e) {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    });
+  });
+
   /* strength meter */
   var suPassword = $("#suPassword"), meter = $("#suMeter"), meterLabel = $("#suMeterLabel");
   var LABELS = ["Use 8+ characters — a longer phrase is stronger.", "Too weak — make it longer.", "Fair — add length or a few more character types.", "Good — almost there.", "Strong password."];
@@ -297,7 +305,9 @@
         void rolesBox.offsetWidth;
         rolesBox.classList.add("shake");
       } else if (err.field && form) {
-        var el = form.querySelector('[name="' + err.field + '"]');
+        var el = err.field === "license"
+          ? form.querySelector('input[name$="License"]')
+          : form.querySelector('[name="' + err.field + '"], [name="su' + err.field.charAt(0).toUpperCase() + err.field.slice(1) + '"]');
         if (el) { setFieldError(el, ""); el.setAttribute("aria-invalid", "true"); }
       }
       if (err.retryMs && submitBtn) lockButton(submitBtn, err.retryMs);
@@ -317,7 +327,7 @@
     Auth.startSession(user, remember);
     var first = (user.name || user.username || "").split(" ")[0];
     showAlert(box, { type: "ok", title: "Welcome" + (first ? ", " + first : "") + "! Taking you in…" });
-    setTimeout(function () { location.replace(NEXT); }, reduceMotion ? 150 : 700);
+    setTimeout(function () { location.replace(hasNext ? NEXT : Auth.homeFor(user)); }, reduceMotion ? 150 : 700);
   }
 
   /* ---------------- sign in ---------------- */
@@ -338,6 +348,11 @@
       setFieldError(idEl, "Check this and try again");
     }
     if (!pw) { reasons.push("Enter your password"); setFieldError(pwEl, "Required"); }
+    var licEl = $("#siLicense"), lic = Auth.normLicense(licEl.value);
+    if ((role === "agent" || role === "company") && !Auth.isCeoEmail(id)) {
+      if (!lic) { reasons.push("Enter the license ID issued to your account"); setFieldError(licEl, "Required"); }
+      else if (!Auth.validators.license.test(lic)) { reasons.push("License IDs look like LVJD007 — “LV”, your initials, then a number"); setFieldError(licEl, "Not valid"); }
+    }
     if (reasons.length) {
       showAlert(siAlert, { title: "Please check your details", reasons: reasons });
       (siForm.querySelector('[aria-invalid="true"]') || idEl).focus({ preventScroll: true });
@@ -348,7 +363,7 @@
 
     setLoading(siBtn, true);
     try {
-      var user = await Auth.provider.signIn({ identifier: id, password: pw, capsLock: capsOn, role: role });
+      var user = await Auth.provider.signIn({ identifier: id, password: pw, capsLock: capsOn, role: role, license: lic });
       finish(siAlert, user, $("#siRemember").checked);
     } catch (err) {
       setLoading(siBtn, false);
@@ -372,7 +387,7 @@
     function bad(el, short, long) { setFieldError(el, short); reasons.push(long); }
 
     f.phone = $("#suPhone"); f.company = $("#suCompany"); f.reg = $("#suReg");
-    f.agency = $("#suAgency"); f.licence = $("#suLicence");
+    f.agency = $("#suAgency"); f.license = $("#suLicense");
     var first = f.first.value.trim().replace(/\s+/g, " ");
     var last = f.last.value.trim().replace(/\s+/g, " ");
     var username = f.username.value.trim();
@@ -393,6 +408,11 @@
     else if (!LOC[stateEl.value]) bad(stateEl, "Not valid", "Choose a state from the list");
     if (!lgaEl.value) bad(lgaEl, "Required", "Select your local government area");
     else if (LOC[stateEl.value] && LOC[stateEl.value].indexOf(lgaEl.value) === -1) bad(lgaEl, "Not valid", "Choose a local government that belongs to " + stateEl.value);
+    if ((role === "agent" || role === "company") && !Auth.isCeoEmail(email)) {
+      var lic = Auth.normLicense(f.license.value);
+      if (!lic) bad(f.license, "Required", "Enter the license ID you received when your application was approved");
+      else if (!Auth.validators.license.test(lic)) bad(f.license, "Not valid", "License IDs look like LVJD007 — “LV”, the holder’s initials, then a number");
+    }
     if (role === "company") {
       if (f.company.value.trim().length < 2) bad(f.company, "Required", "Enter your company’s registered name");
       var reg = f.reg.value.trim();
@@ -424,7 +444,7 @@
       var user = await Auth.provider.signUp({
         role: role, firstName: first, lastName: last, name: first + " " + last, address: address, state: stateEl.value, lga: lgaEl.value, username: username, email: email, password: pw,
         phone: phone, company: f.company.value, regNo: f.reg.value,
-        agency: f.agency.value, licence: f.licence.value,
+        agency: f.agency.value, license: f.license.value,
       });
       finish(suAlert, user, false);
     } catch (err) {

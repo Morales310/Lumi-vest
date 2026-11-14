@@ -3350,3 +3350,21 @@ html.auth-pending body { visibility: hidden; }
 
 /* cards never force the page wider than the screen */
 .grid > .card { min-width: 0; }
+
+/* partner host avatar (listing modal) + footer heading link */
+.host-initial {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--grad);
+  color: var(--on-gold);
+  font-weight: 800;
+}
+.footer-col h3 a { color: inherit; text-decoration: none; }
+.footer-col h3 a:hover { text-decoration: underline; }
+
+/* hidden attribute must win inside the avatar menu */
+.menu-drop [hidden] { display: none !important; }

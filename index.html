@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0907" />
   <!-- Gate: bounces to auth.html unless there is a valid session (must stay first) -->
-  <script src="auth-core.js?v=3" data-guard></script>
+  <script src="auth-core.js?v=6" data-guard></script>
+  <script src="lv-api.js?v=2"></script>
+  <script src="lv-registry.js?v=3"></script>
   <script>
     (function () {
       try {
@@ -27,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body id="top">
 
@@ -76,7 +78,7 @@
       </form>
 
       <nav class="header-right">
-        <a class="host-link" href="#list-property">List your property</a>
+        <a class="host-link" href="apply.html">List your property</a>
         <button class="icon-btn theme-toggle" type="button" id="themeToggle" aria-label="Toggle light / dark mode">
   <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8.5 8.5 0 0 1 10.5 4 8.5 8.5 0 1 0 20 13.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
   <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" stroke-linecap="round"/></svg>
@@ -96,12 +98,13 @@
             <a href="#" data-menu="saved">Saved homes <em id="savedCountMenu">0</em></a>
             <a href="#" data-menu="theme">Appearance <em id="themeLabelMenu">Dark</em></a>
             <a href="#host">Contact the agent</a>
-            <a href="#list-property">List your property</a>
+            <a href="apply.html">List your property</a>
+            <a href="ceo.html" id="menuCeoLink" hidden>CEO dashboard</a>
             <div id="menuAdminWrap">
               <hr />
               <a href="#" data-menu="admin">Manage listings</a>
             </div>
-            <a href="#help">Help centre</a>
+            <a href="https://www.facebook.com/profile.php?id=61588146204641" target="_blank" rel="noopener noreferrer">Help centre</a>
             <hr />
             <a href="#" data-menu="signout">Sign out</a>
           </div>
@@ -226,7 +229,7 @@
         <h2>Own a property in Kaduna?</h2>
         <p>List it on LUMI-VEST and reach serious buyers and tenants — photography included.</p>
       </div>
-      <a class="btn btn-light" href="mailto:jesvelarrealestate@gmail.com?subject=List%20my%20property%20on%20LUMI-VEST">List your property</a>
+      <a class="btn btn-light" href="apply.html">List your property</a>
     </div>
   </section>
 
@@ -234,10 +237,11 @@
   <footer class="footer" id="help">
     <div class="container footer-cols">
       <div class="footer-col">
-        <h3>Support</h3>
+        <h3><a href="https://www.facebook.com/profile.php?id=61588146204641" target="_blank" rel="noopener noreferrer">Support</a></h3>
         <a href="#host">Contact the agent</a>
         <a href="#listings">Browse homes</a>
-        <a href="#list-property">List a property</a>
+        <a href="apply.html">List a property</a>
+        <a href="https://www.facebook.com/profile.php?id=61588146204641" target="_blank" rel="noopener noreferrer">Help centre</a>
       </div>
       <div class="footer-col">
         <h3>Explore</h3>
@@ -297,6 +301,6 @@
     </section>
   </div>
 
-  <script src="script.js?v=6"></script>
+  <script src="script.js?v=9"></script>
 </body>
 </html>

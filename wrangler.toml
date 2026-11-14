@@ -1,0 +1,13 @@
+name = "lumi-vest-publishing-api"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+[vars]
+GH_OWNER = "Morales310"
+GH_REPO = "Lumi-vest"
+GH_BRANCH = "main"
+# Recommended: lock the worker to your website (scheme + host only, no trailing slash).
+# ALLOWED_ORIGIN = "https://lumi-vest.vercel.app"
+
+# The token is NOT stored in this file. Set it with:
+#   wrangler secret put GITHUB_TOKEN
